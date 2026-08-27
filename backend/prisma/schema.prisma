@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  active
+  inactive
+  archived
+}
+
+enum AdminRole {
+  admin
+}
+
+enum SegregationStatus {
+  segregated
+  not_segregated
+}
+
+enum WasteType {
+  biodegradable
+  recyclable
+  non_biodegradable
+}
+
+enum ActivityStatus {
+  success
+  pending
+  failed
+}
+
+model Household {
+  id             String        @id @default(uuid())
+  householdId    String        @unique
+  fullName       String
+  password       String
+  passwordDisplay String?
+  birthdate      String?
+  status         AccountStatus @default(active)
+  joinDate       DateTime      @default(now())
+  purok          String
+  address        String
+  lastCollection DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model GarbageCollector {
+  id              String        @id @default(uuid())
+  collectorId     String        @unique
+  fullName        String
+  password        String
+  passwordDisplay String?
+  birthdate       String?
+  status          AccountStatus @default(active)
+  joinDate        DateTime      @default(now())
+  assignedArea    String
+  contactNumber   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Admin {
+  id        String    @id @default(uuid())
+  adminId   String    @unique
+  name      String
+  email     String    @unique
+  password  String
+  role      AdminRole @default(admin)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model CollectionEntry {
+  id                String           @id @default(uuid())
+  householdId       String
+  collectorId       String
+  segregationStatus SegregationStatus
+  wasteType         WasteType
+  weightKg          Decimal          @db.Decimal(10, 2)
+  timestamp         DateTime         @default(now())
+  editedAt          DateTime?
+
+  @@index([householdId])
+  @@index([collectorId])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  householdId String
+  title       String
+  message     String
+  level       String   @default("Level 1 Reminder")
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([householdId])
+}
+
+model ActivityLog {
+  id           String         @id @default(uuid())
+  user         String
+  activityType String
+  description  String
+  status       ActivityStatus @default(success)
+  timestamp    DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
