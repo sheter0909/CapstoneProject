@@ -24,7 +24,7 @@ A comprehensive residential waste management admin dashboard built with Next.js,
 ## Project Structure
 
 ```
-admin/
+EcoTrack-Admin/
 ├── app/
 │   ├── page.tsx              # Welcome home page
 │   ├── login/

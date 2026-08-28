@@ -1,5 +1,5 @@
 {
-  "name": "myfirstapp",
+  "name": "ecotrack-app",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -10,7 +10,7 @@
     "expo-device": "~57.0.0",
     "expo-font": "~57.0.0",
     "expo-glass-effect": "~57.0.0",
-    "expo-image": "~57.0.0",
+    "expo-image": "~57.0.3",
     "expo-linking": "~57.0.2",
     "expo-router": "~57.0.4",
     "expo-splash-screen": "~57.0.2",

@@ -14,5 +14,5 @@ app.use('/api', router);
 app.use(handleError);
 
 connectDatabase()
-  .then(() => app.listen(config.port, () => console.log(`EcoTrack API listening on http://localhost:${config.port}`)))
+  .then(() => app.listen(config.port, '0.0.0.0', () => console.log(`EcoTrack API listening on http://0.0.0.0:${config.port}`)))
   .catch((error) => { console.error('Database connection failed.', error); process.exit(1); });
