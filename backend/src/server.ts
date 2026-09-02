@@ -7,7 +7,17 @@ import { handleError } from './middleware.js';
 import { router } from './routes.js';
 
 const app = express();
-app.use(cors({ origin: config.corsOrigins, credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowed = config.corsOrigins;
+    if (allowed.includes('*') || !origin || allowed.includes(origin)) {
+      callback(null, allowed.includes('*') || !origin ? true : origin);
+    } else {
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.get('/', (_req, res) => res.json({ status: 'ok', service: 'EcoTrack API' }));
