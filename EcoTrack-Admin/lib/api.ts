@@ -2,6 +2,7 @@ const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'https://capstonepro
 const API_URL = configuredApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? configuredApiUrl.replace(/\/+$/, '')
   : `${configuredApiUrl.replace(/\/+$/, '')}/api`;
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export interface FieldError {
   field: string;
@@ -24,13 +25,21 @@ type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: Fi
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...options,
+      signal: options.signal ?? controller.signal,
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
     });
   } catch {
-    throw new ApiError(`Unable to connect to backend server (${API_URL}). Please verify that the backend is running.`, 503);
+    throw new ApiError(
+      `Unable to connect to backend server (${API_URL}). The server may be waking up from an idle state — please wait up to 60 seconds and try again. If the problem persists, verify that the backend is running.`,
+      503,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 
   let payload: ApiResponse<T> | null = null;
