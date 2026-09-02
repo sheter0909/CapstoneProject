@@ -44,5 +44,8 @@
     "web": "expo start --web",
     "lint": "expo lint"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "uuid": "^11.1.0"
+  }
 }
