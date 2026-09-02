@@ -1,4 +1,5 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://capstoneproject-oksk.onrender.com/api').replace(/\/+$/, '');
+const REQUEST_TIMEOUT_MS = 90_000;
 
 export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: unknown };
 
@@ -46,13 +47,18 @@ export type NotificationItem = {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...options,
+      signal: options.signal ?? controller.signal,
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
     });
   } catch {
     throw new Error(`Unable to connect to backend server at ${API_URL}. Please make sure the backend is running.`);
+  } finally {
+    clearTimeout(timeout);
   }
 
   let payload: ApiResponse<T> | null = null;
