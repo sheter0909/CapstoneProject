@@ -10,6 +10,8 @@ const app = express();
 app.use(cors({ origin: config.corsOrigins, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+app.get('/', (_req, res) => res.json({ status: 'ok', service: 'EcoTrack API' }));
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api', router);
 app.use(handleError);
 
