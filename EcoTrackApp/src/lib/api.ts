@@ -14,6 +14,15 @@ export type HouseholdUser = {
   lastCollection?: string;
 };
 
+export type CollectorUser = {
+  id: string;
+  collectorId: string;
+  fullName: string;
+  assignedArea?: string;
+  contactNumber?: string;
+  status?: 'active' | 'inactive' | 'archived';
+};
+
 export type CollectionHistoryItem = {
   id: string;
   householdId: string;
@@ -88,7 +97,7 @@ export const householdApi = {
 
 export const collectorApi = {
   login: (identifier: string, password: string) =>
-    apiRequest<{ token: string; account: unknown }>('/auth/collector/login', {
+    apiRequest<{ token: string; account: CollectorUser }>('/auth/collector/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),
     }),

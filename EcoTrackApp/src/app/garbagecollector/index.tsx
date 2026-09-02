@@ -7,7 +7,7 @@ import { collectorApi } from '@/lib/api';
 
 export default function GarbageCollectorHomeScreen() {
   const router = useRouter();
-  const { collectorResetAccountId } = useAuth();
+  const { collectorUser } = useAuth();
   const [reports, setReports] = useState<{ _id: string; totalKg: number; entries: number }[]>([]);
 
   useEffect(() => {
@@ -37,8 +37,8 @@ export default function GarbageCollectorHomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.profileCard}>
-        <Text style={styles.title}>Garbage Collector</Text>
-        <Text style={styles.subtitle}>EcoTrack Collection Portal</Text>
+        <Text style={styles.title}>{collectorUser?.fullName || 'Garbage Collector'}</Text>
+        <Text style={styles.subtitle}>Collector ID: {collectorUser?.collectorId || 'Pending'}</Text>
       </View>
 
       <View style={styles.statsCard}>

@@ -7,7 +7,7 @@ import { CollectionHistoryItem, householdApi, NotificationItem } from '@/lib/api
 
 export default function HouseholdHomeScreen() {
   const router = useRouter();
-  const { householdUser, refreshHouseholdProfile } = useAuth();
+  const { householdUser, hydrated, refreshHouseholdProfile } = useAuth();
   const [latestHistory, setLatestHistory] = useState<CollectionHistoryItem | null>(null);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,13 +35,15 @@ export default function HouseholdHomeScreen() {
         if (isMounted) setLoading(false);
       }
     }
-    loadData();
+    if (hydrated) loadData();
     return () => { isMounted = false; };
-  }, []);
+  }, [hydrated]);
 
   const displayName = householdUser?.fullName || 'Household Member';
   const displayInitial = (displayName.trim().charAt(0) || 'H').toUpperCase();
-  const displaySubtitle = [householdUser?.purok, householdUser?.address].filter(Boolean).join(' • ') || 'Community Resident';
+  const displaySubtitle =
+    [householdUser?.purok, householdUser?.address].filter(Boolean).join(' • ')
+    || 'Community Resident';
   const displayId = householdUser?.householdId || 'Pending';
 
   return (

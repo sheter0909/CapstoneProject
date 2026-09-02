@@ -47,9 +47,26 @@ export async function login(role: Role, identifier: string, rawPassword: string)
   if (!account || !(await bcrypt.compare(rawPassword, account.password))) return { error: 'Invalid credentials.' } as const;
   if (account.status === 'archived') return { error: 'This account has been archived.' } as const;
   if (account.status === 'inactive') return { error: 'This account is inactive.' } as const;
-  const id = role === 'household' ? account.householdId! : role === 'collector' ? account.collectorId! : account.id;
-  return { token: await issueToken(id, role, account.fullName ?? account.name), account: { id, role, name: account.fullName ?? account.name, email: account.email, householdId: account.householdId, collectorId: account.collectorId } } as const;
+  const id = role === 'household'
+    ? account.householdId!
+    : role === 'collector'
+      ? account.collectorId!
+      : account.id;
+
+  return {
+    token: await issueToken(id, role, account.fullName ?? account.name),
+    account: {
+      id,
+      role,
+      fullName: account.fullName ?? account.name,
+      name: account.fullName ?? account.name,
+      email: account.email,
+      householdId: account.householdId,
+      collectorId: account.collectorId
+    }
+  } as const;
 }
 
 export async function hashPassword(rawPassword: string) { return bcrypt.hash(rawPassword, 12); }
+
 

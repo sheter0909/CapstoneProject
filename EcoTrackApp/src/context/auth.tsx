@@ -1,7 +1,9 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
-import { collectorApi, householdApi, HouseholdUser, setApiToken } from '@/lib/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { collectorApi, householdApi, CollectorUser, HouseholdUser, setApiToken } from '@/lib/api';
 
 type AuthContextValue = {
+  hydrated: boolean;
   householdUser: HouseholdUser | null;
   householdAuthenticated: boolean;
   householdRecoveryVerified: boolean;
@@ -13,6 +15,7 @@ type AuthContextValue = {
   logoutHousehold: () => void;
 
   collectorAuthenticated: boolean;
+  collectorUser: CollectorUser | null;
   collectorRecoveryVerified: boolean;
   collectorResetAccountId: string | null;
   loginCollector: (collectorId: string, password: string) => Promise<boolean>;
@@ -23,7 +26,12 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const TOKEN_KEY = 'ecotrack.auth.token';
+const HOUSEHOLD_KEY = 'ecotrack.auth.household';
+const COLLECTOR_KEY = 'ecotrack.auth.collector';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [hydrated, setHydrated] = useState(false);
   const [householdUser, setHouseholdUser] = useState<HouseholdUser | null>(null);
   const [householdAuthenticated, setHouseholdAuthenticated] = useState(false);
   const [householdRecoveryVerified, setHouseholdRecoveryVerified] = useState(false);
@@ -31,17 +39,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [householdResetAccountId, setHouseholdResetAccountId] = useState<string | null>(null);
 
   const [collectorAuthenticated, setCollectorAuthenticated] = useState(false);
+  const [collectorUser, setCollectorUser] = useState<CollectorUser | null>(null);
   const [collectorRecoveryVerified, setCollectorRecoveryVerified] = useState(false);
   const [collectorResetToken, setCollectorResetToken] = useState<string | null>(null);
   const [collectorResetAccountId, setCollectorResetAccountId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function restoreSession() {
+      try {
+        const [storedToken, storedHousehold, storedCollector] = await Promise.all([
+          AsyncStorage.getItem(TOKEN_KEY),
+          AsyncStorage.getItem(HOUSEHOLD_KEY),
+          AsyncStorage.getItem(COLLECTOR_KEY),
+        ]);
+
+        if (storedToken) setApiToken(storedToken);
+        if (storedHousehold) {
+          setHouseholdUser(JSON.parse(storedHousehold) as HouseholdUser);
+          setHouseholdAuthenticated(true);
+        }
+        if (storedCollector) {
+          setCollectorUser(JSON.parse(storedCollector) as CollectorUser);
+          setCollectorAuthenticated(true);
+        }
+      } catch {
+        await Promise.all([
+          AsyncStorage.removeItem(TOKEN_KEY),
+          AsyncStorage.removeItem(HOUSEHOLD_KEY),
+          AsyncStorage.removeItem(COLLECTOR_KEY),
+        ]);
+      } finally {
+        setHydrated(true);
+      }
+    }
+
+    restoreSession();
+  }, []);
 
   const loginHousehold = async (householdId: string, password: string) => {
     try {
       const result = await householdApi.login(householdId.trim(), password);
       setApiToken(result.token);
+      await Promise.all([
+        AsyncStorage.setItem(TOKEN_KEY, result.token),
+        AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(result.account)),
+      ]);
+
       try {
         const profile = await householdApi.profile();
         setHouseholdUser(profile);
+        await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
       } catch {
         setHouseholdUser(result.account);
       }
@@ -91,12 +138,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHouseholdAuthenticated(false);
     setHouseholdUser(null);
     setApiToken(null);
+    Promise.all([
+      AsyncStorage.removeItem(TOKEN_KEY),
+      AsyncStorage.removeItem(HOUSEHOLD_KEY),
+    ]);
   };
 
   const loginCollector = async (collectorId: string, password: string) => {
     try {
       const result = await collectorApi.login(collectorId, password);
       setApiToken(result.token);
+      setCollectorUser(result.account);
+      await Promise.all([
+        AsyncStorage.setItem(TOKEN_KEY, result.token),
+        AsyncStorage.setItem(COLLECTOR_KEY, JSON.stringify(result.account)),
+      ]);
       setCollectorAuthenticated(true);
       return true;
     } catch {
@@ -132,11 +188,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutCollector = () => {
     setCollectorAuthenticated(false);
+    setCollectorUser(null);
     setApiToken(null);
+    Promise.all([
+      AsyncStorage.removeItem(TOKEN_KEY),
+      AsyncStorage.removeItem(COLLECTOR_KEY),
+    ]);
   };
 
   const value = useMemo(
     () => ({
+      hydrated,
       householdUser,
       householdAuthenticated,
       householdRecoveryVerified,
@@ -148,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logoutHousehold,
 
       collectorAuthenticated,
+      collectorUser,
       collectorRecoveryVerified,
       collectorResetAccountId,
       loginCollector,
@@ -156,11 +219,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logoutCollector,
     }),
     [
+      hydrated,
       householdUser,
       householdAuthenticated,
       householdRecoveryVerified,
       householdResetAccountId,
       collectorAuthenticated,
+      collectorUser,
       collectorRecoveryVerified,
       collectorResetAccountId,
     ]
