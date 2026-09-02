@@ -87,8 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const profile = await householdApi.profile();
-        setHouseholdUser(profile);
-        await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
+        if (profile?.fullName && profile.householdId) {
+          setHouseholdUser(profile);
+          await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
+        } else {
+          setHouseholdUser(result.account);
+        }
       } catch {
         setHouseholdUser(result.account);
       }
@@ -102,7 +106,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshHouseholdProfile = async () => {
     try {
       const profile = await householdApi.profile();
-      setHouseholdUser(profile);
+      if (profile?.fullName && profile.householdId) {
+        setHouseholdUser(profile);
+        await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
+      }
     } catch {
       // ignore
     }
