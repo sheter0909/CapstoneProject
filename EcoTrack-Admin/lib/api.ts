@@ -3,6 +3,9 @@ const API_URL = configuredApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? configuredApiUrl.replace(/\/+$/, '')
   : `${configuredApiUrl.replace(/\/+$/, '')}/api`;
 const REQUEST_TIMEOUT_MS = 90_000;
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+const MAX_RETRIES = RETRY_DELAYS_MS.length;
+const CONNECT_ERROR_STATUS = 503;
 
 export interface FieldError {
   field: string;
@@ -23,7 +26,41 @@ export class ApiError extends Error {
 
 type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown };
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export type ApiConnectingState = {
+  status: 'idle' | 'connecting';
+  attempt: number;
+  totalRetries: number;
+  path: string;
+};
+
+let connectingState: ApiConnectingState = { status: 'idle', attempt: 0, totalRetries: MAX_RETRIES, path: '' };
+const connectingListeners = new Set<(state: ApiConnectingState) => void>();
+
+export function getApiConnectingState(): ApiConnectingState {
+  return connectingState;
+}
+
+export function subscribeApiConnecting(listener: (state: ApiConnectingState) => void): () => void {
+  connectingListeners.add(listener);
+  return () => {
+    connectingListeners.delete(listener);
+  };
+}
+
+function setConnectingState(state: ApiConnectingState) {
+  connectingState = state;
+  connectingListeners.forEach((listener) => listener(state));
+}
+
+function idleState(): ApiConnectingState {
+  return { status: 'idle', attempt: 0, totalRetries: MAX_RETRIES, path: '' };
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
   let response: Response;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -34,10 +71,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
     });
   } catch {
-    throw new ApiError(
-      `Unable to connect to backend server (${API_URL}). The server may be waking up from an idle state — please wait up to 60 seconds and try again. If the problem persists, verify that the backend is running.`,
-      503,
-    );
+    throw new ApiError('Unable to reach the server. Please check your internet connection and try again.', CONNECT_ERROR_STATUS);
   } finally {
     clearTimeout(timeout);
   }
@@ -63,6 +97,34 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   return payload.data;
+}
+
+export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const data = await requestOnce<T>(path, options);
+      setConnectingState(idleState());
+      return data;
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : new ApiError('Unexpected error.', CONNECT_ERROR_STATUS);
+
+      // Validation, auth, and other server responses are final — do not retry.
+      if (apiError.status !== CONNECT_ERROR_STATUS) throw error;
+
+      if (attempt >= MAX_RETRIES) {
+        setConnectingState(idleState());
+        throw new ApiError(
+          "We couldn't reach the server after several attempts. Please check your internet connection and try again.",
+          CONNECT_ERROR_STATUS,
+        );
+      }
+
+      setConnectingState({ status: 'connecting', attempt: attempt + 1, totalRetries: MAX_RETRIES, path });
+      await delay(RETRY_DELAYS_MS[attempt]);
+    }
+  }
+
+  throw new ApiError("We couldn't reach the server after several attempts. Please try again.", CONNECT_ERROR_STATUS);
 }
 
 function authHeader(): Record<string, string> {

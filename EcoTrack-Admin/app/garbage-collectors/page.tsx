@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
 import { addActivity, formatActivityTimestamp } from '../../lib/activity';
 import { adminApi, ApiError } from '../../lib/api';
+import { useApiConnecting } from '../../lib/useApiConnecting';
 
 interface GarbageCollector {
   id: string;
@@ -38,6 +39,8 @@ export default function GarbageCollectorsPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const apiConnecting = useApiConnecting();
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [formData, setFormData] = useState({
     id: '',
@@ -169,6 +172,7 @@ export default function GarbageCollectorsPage() {
     };
 
     let account: any;
+    setIsSubmitting(true);
     try {
       account = await adminApi.createCollector({ collectorId: idValue, fullName: formData.name.trim(), assignedArea: formData.zone.trim(), birthdate: formData.birthdate || undefined, contactNumber: formData.phone.trim() || undefined, password: formData.password });
     } catch (error) {
@@ -186,6 +190,8 @@ export default function GarbageCollectorsPage() {
         setToastMessage(error instanceof Error ? error.message : 'Unable to create collector.');
       }
       return;
+    } finally {
+      setIsSubmitting(false);
     }
     const { password: _password, ...collectorWithoutPassword } = newCollector;
     const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, joinDate: account.joinDate, status: account.status };
@@ -362,7 +368,7 @@ export default function GarbageCollectorsPage() {
 
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="fixed inset-0 bg-black/50" onClick={resetFormState} />
+            <div className="fixed inset-0 bg-black/50" onClick={isSubmitting ? undefined : resetFormState} />
             <div className="relative z-10 w-full max-w-3xl rounded-[28px] bg-white p-6 shadow-2xl sm:p-8">
               <div className="mb-6 flex items-center justify-between">
                 <div>
@@ -492,17 +498,26 @@ export default function GarbageCollectorsPage() {
                   <button
                     type="button"
                     onClick={resetFormState}
-                    className="rounded-2xl bg-green-50 px-5 py-2.5 text-sm font-semibold text-green-700 transition hover:bg-green-100"
+                    disabled={isSubmitting}
+                    className="rounded-2xl bg-green-50 px-5 py-2.5 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-2xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700"
+                    disabled={isSubmitting}
+                    className="rounded-2xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isEditing ? 'Save Changes' : 'Create Account'}
+                    {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Account'}
                   </button>
                 </div>
+
+                {isSubmitting && apiConnecting.status === 'connecting' && (
+                  <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-amber-500" />
+                    Connecting to server, this may take up to a minute if it&apos;s been idle... (attempt {apiConnecting.attempt} of {apiConnecting.totalRetries})
+                  </div>
+                )}
               </form>
             </div>
           </div>

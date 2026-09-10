@@ -5,6 +5,11 @@ import { Colors, Spacing } from '@/constants/theme';
 import { CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
 
+function toWasteTypeLabel(raw: CollectionHistoryItem['wasteType']): string {
+  if (raw === 'non_biodegradable') return 'Non-biodegradable';
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 export default function GarbageCollectorScanResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ householdId?: string }>();
@@ -93,12 +98,17 @@ export default function GarbageCollectorScanResultsScreen() {
 
             <Pressable
               style={styles.primaryButton}
-              onPress={() =>
-                router.push({
-                  pathname: '/garbagecollector/garbage-input' as any,
-                  params: { householdId: household?.householdId || targetId },
-                })
-              }
+              onPress={() => {
+                const navParams: Record<string, string> = { householdId: household?.householdId || targetId };
+                const mostRecent = history[0];
+                if (mostRecent && Date.now() - new Date(mostRecent.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000) {
+                  navParams.entryId = mostRecent.id;
+                  navParams.segregated = mostRecent.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated';
+                  navParams.wasteType = toWasteTypeLabel(mostRecent.wasteType);
+                  navParams.weight = String(mostRecent.weightKg);
+                }
+                router.push({ pathname: '/garbagecollector/garbage-input' as any, params: navParams });
+              }}
             >
               <Text style={styles.primaryButtonText}>Proceed to Collection Input</Text>
             </Pressable>

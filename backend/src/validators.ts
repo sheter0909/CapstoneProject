@@ -10,6 +10,7 @@ export const birthdate = body('birthdate')
     if (!value) return true;
     const date = new Date(value);
     if (isNaN(date.getTime())) {
+
       throw new Error('Birthdate must be a valid date (YYYY-MM-DD).');
     }
     return true;
@@ -46,6 +47,6 @@ export const collectorFields = [
 export const collectionFields = [
   body('householdId').trim().notEmpty().withMessage('Household ID is required.'),
   body('segregationStatus').isIn(['segregated', 'not_segregated']).withMessage('Segregation status must be segregated or not_segregated.'),
-  body('wasteType').isIn(['biodegradable', 'recyclable', 'non_biodegradable', 'non-biodegradable']).withMessage('Waste type must be biodegradable, recyclable, or non-biodegradable.'),
+  body('wasteType').isIn(['biodegradable', 'recyclable', 'non_biodegradable']).withMessage('Waste type must be biodegradable, recyclable, or non-biodegradable.'),
   body('weightKg').isFloat({ min: 0, max: 15 }).withMessage('Weight must be a number between 0 and 15 kg.').toFloat(),
 ];
