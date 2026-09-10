@@ -86,7 +86,7 @@ export default function GarbageCollectorGarbageInputScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <Pressable style={styles.linkButton} onPress={() => safeBack(router, '/garbagecollector/home')}>
+        <Pressable style={styles.linkButton} onPress={() => safeBack(router, '/garbagecollector')}>
           <Text style={styles.linkText}>{editing ? 'Cancel' : 'Back to results'}</Text>
         </Pressable>
       </View>

@@ -30,12 +30,6 @@ export default function Login() {
     }
   };
 
-  const fillDemoCredentials = () => {
-    setEmail('admin@ecotrack.local');
-    setPassword('');
-    setError('Enter the password for your Admin account.');
-  };
-
   return (
     <main className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-green-100">
       <div className="grid md:grid-cols-2 gap-8 max-w-4xl w-full px-4">
@@ -49,10 +43,6 @@ export default function Login() {
           <p className="text-green-100 text-sm leading-relaxed">
             Sign in to your account to manage household waste efficiently and monitor your community&apos;s environmental impact.
           </p>
-          <div className="mt-8 bg-green-600 rounded-lg p-4">
-            <p className="text-green-100 text-xs font-semibold mb-2">Admin access</p>
-            <p className="text-white text-xs">Use the Admin account created in Neon.</p>
-          </div>
         </div>
 
         {/* Right side - Login form */}
@@ -123,14 +113,6 @@ export default function Login() {
               className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition"
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
-
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg transition"
-            >
-              Fill Demo Credentials
             </button>
           </form>
 

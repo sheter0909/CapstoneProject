@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/Pagination';
-import { addActivity, formatActivityTimestamp } from '@/lib/activity';
+import { addActivity } from '@/lib/activity';
 
 interface Household {
   id: string;
@@ -147,7 +147,7 @@ export default function ArchivePage() {
       setHouseholds(updated);
       localStorage.setItem('households', JSON.stringify(updated));
       addActivity(
-        `${adminUser?.name || 'Admin User'} restored household ${households.find((h) => h.id === id)?.name ?? id} — ${formatActivityTimestamp(new Date())}`,
+        `${adminUser?.name || 'Admin User'} restored household ${households.find((h) => h.id === id)?.name ?? id}`,
         adminUser?.name || 'Admin User',
         'Account Update'
       );
@@ -165,7 +165,7 @@ export default function ArchivePage() {
       setCollectors(updated);
       localStorage.setItem('garbageCollectors', JSON.stringify(updated));
       addActivity(
-        `${adminUser?.name || 'Admin User'} restored garbage collector ${collectors.find((c) => c.id === id)?.name ?? id} — ${formatActivityTimestamp(new Date())}`,
+        `${adminUser?.name || 'Admin User'} restored garbage collector ${collectors.find((c) => c.id === id)?.name ?? id}`,
         adminUser?.name || 'Admin User',
         'Account Update'
       );

@@ -97,3 +97,126 @@ export function exportReportToExcel(data: ReportData): void {
   const filename = `ecotrack-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
+
+export type DetailedExportKind =
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'households'
+  | 'collections'
+  | 'segregation'
+  | 'compliance';
+
+export interface CollectionExportRow {
+  householdId: string;
+  householdName: string;
+  purok: string;
+  collectionDate: string;
+  weightKg: number;
+  segregationStatus: string;
+  wasteType: string;
+  collector: string;
+  remarks: string;
+}
+
+export interface ComplianceExportRow {
+  householdId: string;
+  householdName: string;
+  purok: string;
+  totalCollections: number;
+  segregatedCount: number;
+  complianceRate: string;
+  lastCollection: string;
+}
+
+function formatExportDate(iso: string): string {
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function headerBlock(title: string, periodLabel: string, totalRecords: number): (string | number)[][] {
+  return [
+    [title],
+    [`Reporting Period: ${periodLabel}`],
+    [`Generated: ${new Date().toLocaleString()}`],
+    [`Total Records: ${totalRecords}`],
+    [],
+  ];
+}
+
+export function exportDetailedReport(
+  kind: DetailedExportKind,
+  periodLabel: string,
+  collections: CollectionExportRow[],
+  compliance: ComplianceExportRow[],
+): void {
+  const wb = XLSX.utils.book_new();
+  const titles: Record<DetailedExportKind, string> = {
+    weekly: 'Weekly Waste Report',
+    monthly: 'Monthly Waste Report',
+    yearly: 'Yearly Waste Report',
+    households: 'Household Waste Records',
+    collections: 'Waste Collection Records',
+    segregation: 'Segregation Records',
+    compliance: 'Compliance Summary',
+  };
+  const title = titles[kind];
+
+  if (kind === 'compliance') {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ...headerBlock(title, periodLabel, compliance.length),
+      ['Household ID', 'Household Name', 'Purok', 'Total Collections', 'Segregated', 'Compliance Rate', 'Last Collection'],
+      ...compliance.map((row) => [
+        row.householdId,
+        row.householdName,
+        row.purok,
+        row.totalCollections,
+        row.segregatedCount,
+        row.complianceRate,
+        row.lastCollection,
+      ]),
+    ]);
+    setColWidths(sheet, [14, 24, 12, 18, 12, 16, 16]);
+    XLSX.utils.book_append_sheet(wb, sheet, 'Compliance');
+  } else {
+    const rows =
+      kind === 'segregation'
+        ? collections.filter((row) => row.segregationStatus.toLowerCase() !== 'segregated')
+        : collections;
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ...headerBlock(title, periodLabel, rows.length),
+      ['Household ID', 'Household Name', 'Purok', 'Collection Date', 'Waste Weight (kg)', 'Segregation Status', 'Waste Type', 'Collector', 'Remarks'],
+      ...rows.map((row) => [
+        row.householdId,
+        row.householdName,
+        row.purok,
+        formatExportDate(row.collectionDate),
+        row.weightKg,
+        row.segregationStatus,
+        row.wasteType,
+        row.collector,
+        row.remarks,
+      ]),
+    ]);
+    setColWidths(sheet, [14, 24, 12, 16, 18, 18, 16, 22, 24]);
+    XLSX.utils.book_append_sheet(wb, sheet, 'Records');
+
+    const totalKg = rows.reduce((sum, row) => sum + Number(row.weightKg || 0), 0);
+    const segregated = rows.filter((row) => row.segregationStatus.toLowerCase() === 'segregated').length;
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+      ...headerBlock(`${title} — Summary`, periodLabel, rows.length),
+      ['Metric', 'Value'],
+      ['Total Collections', rows.length],
+      ['Total Waste (kg)', Math.round(totalKg * 100) / 100],
+      ['Segregated Collections', segregated],
+      ['Segregation Rate (%)', rows.length ? Math.round((segregated / rows.length) * 1000) / 10 : 0],
+      ['Reporting Households', new Set(rows.map((row) => row.householdId)).size],
+    ]);
+    setColWidths(summarySheet, [24, 18]);
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+  }
+
+  const filename = `ecotrack-${kind}-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}

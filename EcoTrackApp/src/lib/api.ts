@@ -50,12 +50,26 @@ export type CollectionHistoryItem = {
 
 export type NotificationItem = {
   id: string;
-  householdId: string;
+  householdId?: string | null;
+  collectorId?: string | null;
+  senderId: string;
+  senderRole: string;
+  senderName: string;
+  recipientType: string;
   title: string;
   message: string;
   level: string;
   read: boolean;
   createdAt: string;
+};
+
+export type SendNotificationBody = {
+  title: string;
+  message: string;
+  recipientType: 'household' | 'collector' | 'all-households' | 'all-collectors';
+  householdId?: string;
+  collectorId?: string;
+  level?: string;
 };
 
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
@@ -131,6 +145,10 @@ export const householdApi = {
   profile: () => apiRequest<HouseholdUser>('/households/me'),
   history: () => apiRequest<CollectionHistoryItem[]>('/households/me/history'),
   notifications: () => apiRequest<NotificationItem[]>('/households/me/notifications'),
+  sendNotification: (body: SendNotificationBody) =>
+    apiRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+  markNotificationRead: (id: string) =>
+    apiRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
   forgotPassword: (identifier: string, birthdate: string) =>
     apiRequest<{ resetToken: string; accountId: string }>('/auth/household/forgot-password', {
       method: 'POST',
@@ -172,4 +190,9 @@ export const collectorApi = {
     }),
   activityLogs: () => apiRequest<unknown>('/collectors/me/activity-logs'),
   reports: () => apiRequest<unknown>('/collectors/me/reports'),
+  notifications: () => apiRequest<NotificationItem[]>('/collectors/me/notifications'),
+  sendNotification: (body: SendNotificationBody) =>
+    apiRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+  markNotificationRead: (id: string) =>
+    apiRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
 };

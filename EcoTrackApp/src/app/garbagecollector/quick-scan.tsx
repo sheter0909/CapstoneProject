@@ -20,6 +20,7 @@ export default function GarbageCollectorQuickScanScreen() {
   const router = useRouter();
   const [householdId, setHouseholdId] = useState('');
   const [scanned, setScanned] = useState(false);
+  const [error, setError] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
 
   const navigateToResults = (targetId: string) => {
@@ -32,20 +33,35 @@ export default function GarbageCollectorQuickScanScreen() {
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
     const extracted = extractHouseholdId(data);
-    if (!extracted) return;
+    if (!extracted) {
+      setError('The scanned QR code is invalid. Please try again or enter the Household ID manually.');
+      return;
+    }
+    setError('');
     setScanned(true);
     setHouseholdId(extracted);
     navigateToResults(extracted);
   };
 
   const handleProceed = () => {
-    const targetId = householdId.trim() || extractHouseholdId(householdId) || '0123';
+    const raw = householdId.trim();
+    if (!raw) {
+      setError("You haven't entered a Household ID or scanned a QR code.");
+      return;
+    }
+    const targetId = extractHouseholdId(raw);
+    if (!targetId) {
+      setError('The Household ID or QR code is invalid. Please check and try again.');
+      return;
+    }
+    setError('');
     navigateToResults(targetId);
   };
 
   const handleRescan = () => {
     setScanned(false);
     setHouseholdId('');
+    setError('');
   };
 
   if (!permission) {
@@ -86,7 +102,7 @@ export default function GarbageCollectorQuickScanScreen() {
             <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
           </Pressable>
 
-          <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector/home')}>
+          <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
             <Text style={styles.backText}>Back to Dashboard</Text>
           </Pressable>
         </View>
@@ -121,18 +137,27 @@ export default function GarbageCollectorQuickScanScreen() {
           <TextInput
             style={styles.input}
             value={householdId}
-            onChangeText={setHouseholdId}
+            onChangeText={(value) => {
+              setHouseholdId(value);
+              if (error) setError('');
+            }}
             placeholder="e.g. 011704 or 0123"
             placeholderTextColor="#999"
             autoCapitalize="none"
           />
         </View>
 
+        {error ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
         <Pressable style={styles.primaryButton} onPress={handleProceed}>
           <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
         </Pressable>
 
-        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector/home')}>
+        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
           <Text style={styles.backText}>Back to Dashboard</Text>
         </Pressable>
       </View>
@@ -214,6 +239,20 @@ const styles = StyleSheet.create({
     borderColor: '#D9D9D9',
     backgroundColor: '#F7F7F7',
     fontSize: 15,
+  },
+  errorBox: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
   },
   primaryButton: {
     marginTop: Spacing.four,

@@ -3,7 +3,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
-import { addActivity, formatActivityTimestamp } from '../../lib/activity';
+import { addActivity } from '../../lib/activity';
 import { adminApi, ApiError, type CollectorCollectionRecord } from '../../lib/api';
 import { useApiConnecting } from '../../lib/useApiConnecting';
 
@@ -57,6 +57,12 @@ export default function GarbageCollectorsPage() {
   const [formErrors, setFormErrors] = useState<{ id?: string; name?: string; zone?: string; birthdate?: string; password?: string }>({});
   const [originalCollectorId, setOriginalCollectorId] = useState<string | null>(null);
 
+  const stripPassword = <T extends { password?: unknown }>(item: T): Omit<T, 'password'> => {
+    const { password: _password, ...rest } = item;
+    void _password;
+    return rest;
+  };
+
   const visibleCollectors = collectors.filter((collector) => collector.status !== 'archived');
 
   const filteredCollectors = visibleCollectors.filter((collector) => {
@@ -99,7 +105,6 @@ export default function GarbageCollectorsPage() {
             phone: account.contactNumber ?? '',
             zone: account.assignedArea,
             birthdate: account.birthdate ?? '',
-            password: account.password ?? '',
             joinDate: account.joinDate,
             status: account.status,
           }));
@@ -233,7 +238,7 @@ export default function GarbageCollectorsPage() {
       phone: collector.phone,
       zone: collector.zone,
       birthdate: collector.birthdate ?? '',
-      password: collector.password ?? '',
+      password: '',
     });
     setFormErrors({});
     setShowPassword(false);
@@ -291,7 +296,6 @@ export default function GarbageCollectorsPage() {
         phone: account.contactNumber ?? '',
         zone: account.assignedArea,
         birthdate: account.birthdate ?? formData.birthdate,
-        password: account.password ?? formData.password,
         status: account.status,
       };
 
@@ -339,13 +343,13 @@ export default function GarbageCollectorsPage() {
     const updatedSelectedCollector = updatedCollectors.find((collector) => collector.id === selectedCollector.id);
 
     setCollectors(updatedCollectors);
-    localStorage.setItem('garbageCollectors', JSON.stringify(updatedCollectors));
+    localStorage.setItem('garbageCollectors', JSON.stringify(updatedCollectors.map(stripPassword)));
     setSelectedCollector(updatedSelectedCollector ?? { ...selectedCollector, status: nextStatus, previousStatus: nextPreviousStatus });
     setShowArchiveConfirm(false);
     setShowUpdateSuccess(true);
     const message = isRestoring ? 'Garbage Collector restored successfully' : 'Garbage Collector archived successfully';
     setToastMessage(message);
-    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} garbage collector ${selectedCollector.name} — ${formatActivityTimestamp(new Date())}`, adminUser?.name || 'Admin User', 'Account Update');
+    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} garbage collector ${selectedCollector.name}`, adminUser?.name || 'Admin User', 'Account Update');
     setTimeout(() => {
       setToastMessage(null);
       setShowUpdateSuccess(false);

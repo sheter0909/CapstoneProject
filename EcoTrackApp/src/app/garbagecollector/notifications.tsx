@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
-import { householdApi, NotificationItem } from '@/lib/api';
+import { collectorApi, NotificationItem } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
 
 function formatDateTime(iso: string): string {
@@ -13,13 +13,13 @@ function formatDateTime(iso: string): string {
   return `${datePart} • ${timePart}`;
 }
 
-export default function HouseholdNotificationsScreen() {
+export default function CollectorNotificationsScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCompose, setShowCompose] = useState(false);
-  const [collectorId, setCollectorId] = useState('');
+  const [householdId, setHouseholdId] = useState('');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -29,7 +29,7 @@ export default function HouseholdNotificationsScreen() {
   const loadNotifications = () => {
     setLoading(true);
     setError('');
-    householdApi
+    collectorApi
       .notifications()
       .then((items) => {
         setNotifications(Array.isArray(items) ? items : []);
@@ -44,7 +44,7 @@ export default function HouseholdNotificationsScreen() {
 
   useEffect(() => {
     let isMounted = true;
-    householdApi
+    collectorApi
       .notifications()
       .then((items) => {
         if (isMounted) setNotifications(Array.isArray(items) ? items : []);
@@ -62,7 +62,7 @@ export default function HouseholdNotificationsScreen() {
 
   const handleMarkRead = async (id: string) => {
     try {
-      await householdApi.markNotificationRead(id);
+      await collectorApi.markNotificationRead(id);
       setNotifications((current) => current.map((item) => (item.id === id ? { ...item, read: true } : item)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to mark notification as read.');
@@ -72,23 +72,23 @@ export default function HouseholdNotificationsScreen() {
   const handleSend = async () => {
     setSendError('');
     setSendSuccess('');
-    if (!collectorId.trim() || !title.trim() || !message.trim()) {
-      setSendError('Collector ID, title, and message are required.');
+    if (!householdId.trim() || !title.trim() || !message.trim()) {
+      setSendError('Household ID, title, and message are required.');
       return;
     }
     setSending(true);
     try {
-      await householdApi.sendNotification({
+      await collectorApi.sendNotification({
         title: title.trim(),
         message: message.trim(),
-        recipientType: 'collector',
-        collectorId: collectorId.trim(),
-        level: 'Household Concern',
+        recipientType: 'household',
+        householdId: householdId.trim(),
+        level: 'Collection Notice',
       });
-      setCollectorId('');
+      setHouseholdId('');
       setTitle('');
       setMessage('');
-      setSendSuccess('Message sent to garbage collector.');
+      setSendSuccess('Message sent to household.');
       loadNotifications();
     } catch (err) {
       setSendError(err instanceof Error ? err.message : 'Unable to send message.');
@@ -105,29 +105,29 @@ export default function HouseholdNotificationsScreen() {
         <Text style={styles.title}>
           Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ''}
         </Text>
-        <Text style={styles.subtitle}>Important updates, reminders, and alerts regarding waste collection.</Text>
+        <Text style={styles.subtitle}>Announcements from admin and messages from households.</Text>
 
         <Pressable style={styles.composeToggle} onPress={() => setShowCompose((value) => !value)}>
-          <Text style={styles.composeToggleText}>{showCompose ? 'Hide message form' : 'Message your garbage collector'}</Text>
+          <Text style={styles.composeToggleText}>{showCompose ? 'Hide message form' : 'Message a household'}</Text>
         </Pressable>
 
         {showCompose ? (
           <View style={styles.composeBox}>
-            <Text style={styles.label}>Collector ID</Text>
+            <Text style={styles.label}>Household ID</Text>
             <TextInput
               style={styles.input}
-              value={collectorId}
-              onChangeText={setCollectorId}
-              placeholder="e.g. GC-0003"
+              value={householdId}
+              onChangeText={setHouseholdId}
+              placeholder="e.g. 202319"
               placeholderTextColor="#999"
-              autoCapitalize="characters"
+              autoCapitalize="none"
             />
             <Text style={styles.label}>Title</Text>
             <TextInput
               style={styles.input}
               value={title}
               onChangeText={setTitle}
-              placeholder="e.g. Missed collection"
+              placeholder="e.g. Waste not segregated"
               placeholderTextColor="#999"
             />
             <Text style={styles.label}>Message</Text>
@@ -135,7 +135,7 @@ export default function HouseholdNotificationsScreen() {
               style={[styles.input, styles.messageInput]}
               value={message}
               onChangeText={setMessage}
-              placeholder="Describe your concern..."
+              placeholder="Write your message..."
               placeholderTextColor="#999"
               multiline
             />
@@ -188,7 +188,7 @@ export default function HouseholdNotificationsScreen() {
           ))
         )}
 
-        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/household')}>
+        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
           <Text style={styles.backText}>Back to Dashboard</Text>
         </Pressable>
       </View>

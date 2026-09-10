@@ -32,7 +32,7 @@ export default function HouseholdQrScreen() {
           <Text style={styles.infoId}>Household ID: {householdId}</Text>
         </View>
 
-        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/household/home')}>
+        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/household')}>
           <Text style={styles.backText}>Back to Dashboard</Text>
         </Pressable>
       </View>

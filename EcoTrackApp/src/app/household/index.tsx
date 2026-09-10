@@ -45,6 +45,7 @@ export default function HouseholdHomeScreen() {
     [householdUser?.purok, householdUser?.address].filter(Boolean).join(' • ')
     || 'Community Resident';
   const displayId = householdUser?.householdId || 'Pending';
+  const isCompliant = !latestHistory || latestHistory.segregationStatus === 'segregated';
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -57,6 +58,17 @@ export default function HouseholdHomeScreen() {
           <Text style={styles.profileSubtitle}>{displaySubtitle}</Text>
           <Text style={styles.profileMeta}>Household ID: {displayId}</Text>
         </View>
+      </View>
+
+      <View style={isCompliant ? styles.compliantBanner : styles.attentionBanner}>
+        <Text style={isCompliant ? styles.compliantTitle : styles.attentionTitle}>
+          {isCompliant ? 'Great job!' : 'Attention needed'}
+        </Text>
+        <Text style={isCompliant ? styles.compliantText : styles.attentionText}>
+          {isCompliant
+            ? 'Your household is currently compliant. Keep segregating your waste properly.'
+            : 'Your latest collection was marked as not properly segregated. Please segregate before the next collection.'}
+        </Text>
       </View>
 
       <View style={styles.sectionCard}>
@@ -170,6 +182,42 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
+  },
+  compliantBanner: {
+    backgroundColor: '#E8F7E9',
+    borderWidth: 1,
+    borderColor: '#BBE5C3',
+    borderRadius: 24,
+    padding: Spacing.four,
+    gap: 4,
+  },
+  compliantTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F7A37',
+  },
+  compliantText: {
+    fontSize: 15,
+    color: '#2E6B34',
+    lineHeight: 22,
+  },
+  attentionBanner: {
+    backgroundColor: '#FEF6E7',
+    borderWidth: 1,
+    borderColor: '#F5D9A8',
+    borderRadius: 24,
+    padding: Spacing.four,
+    gap: 4,
+  },
+  attentionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#9A5C1B',
+  },
+  attentionText: {
+    fontSize: 15,
+    color: '#7A4A15',
+    lineHeight: 22,
   },
   sectionHeader: {
     flexDirection: 'row',

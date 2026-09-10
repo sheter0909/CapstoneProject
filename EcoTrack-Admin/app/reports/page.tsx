@@ -2,8 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminApi } from '../../lib/api';
-import type { ReportData, SummaryRow, WeeklyCollectionRow, WasteDistributionRow, MonthlyPerformanceRow } from '../../lib/reportExport';
+import { adminApi, type CollectionAdminRecord } from '../../lib/api';
+import type {
+  ReportData,
+  SummaryRow,
+  WeeklyCollectionRow,
+  WasteDistributionRow,
+  MonthlyPerformanceRow,
+  DetailedExportKind,
+  CollectionExportRow,
+  ComplianceExportRow,
+} from '../../lib/reportExport';
 
 const INITIAL_SUMMARY: SummaryRow = {
   totalHouseholds: 156,
@@ -151,10 +160,44 @@ function weekProgressPercent(kg: number): number {
   return Math.max(8, Math.min(100, Math.round((kg / max) * 100)));
 }
 
+type ReportPeriod = 'weekly' | 'monthly' | 'yearly';
+
+const EXPORT_OPTIONS: { value: DetailedExportKind; label: string }[] = [
+  { value: 'weekly', label: 'Weekly Report' },
+  { value: 'monthly', label: 'Monthly Report' },
+  { value: 'yearly', label: 'Yearly Report' },
+  { value: 'households', label: 'Household Waste Records' },
+  { value: 'collections', label: 'Waste Collection Records' },
+  { value: 'segregation', label: 'Segregation Records' },
+  { value: 'compliance', label: 'Compliance Summary' },
+];
+
+function startOfWeek(dateStr: string): Date {
+  const date = new Date(`${dateStr}T00:00:00`);
+  const day = date.getDay();
+  const diff = (day + 6) % 7;
+  date.setDate(date.getDate() - diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function toWasteLabel(raw: string): string {
+  if (raw === 'biodegradable') return 'Biodegradable';
+  if (raw === 'recyclable') return 'Recyclable';
+  if (raw === 'non_biodegradable') return 'Non-biodegradable';
+  return raw;
+}
+
 export default function ReportsPage() {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [reportData, setReportData] = useState<ReportData>(INITIAL_REPORT);
+  const [period, setPeriod] = useState<ReportPeriod>('weekly');
+  const [selectedWeek, setSelectedWeek] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [exportKind, setExportKind] = useState<DetailedExportKind>('weekly');
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
@@ -186,17 +229,112 @@ export default function ReportsPage() {
       });
   }, []);
 
+  const periodLabel =
+    period === 'weekly'
+      ? `Week of ${startOfWeek(selectedWeek).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : period === 'monthly'
+        ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        : `Year ${selectedYear}`;
+
+  const filteredWeekly: WeeklyCollectionRow[] = reportData.weeklyCollection.filter((row) => {
+    if (!row.date) return period === 'weekly';
+    if (period === 'weekly') {
+      const start = startOfWeek(selectedWeek).getTime();
+      const day = new Date(`${row.date}T00:00:00`).getTime();
+      return day >= start && day < start + 7 * 24 * 60 * 60 * 1000;
+    }
+    if (period === 'monthly') return row.date.slice(0, 7) === selectedMonth;
+    return row.date.slice(0, 4) === String(selectedYear);
+  });
+
+  const filteredMonthly: MonthlyPerformanceRow[] = reportData.monthlyPerformance.filter((row) => {
+    const parsed = new Date(`${row.month} 01`);
+    if (isNaN(parsed.getTime())) return true;
+    if (period === 'monthly') {
+      return parsed.toISOString().slice(0, 7) === selectedMonth;
+    }
+    if (period === 'yearly') {
+      return parsed.getFullYear() === selectedYear;
+    }
+    return true;
+  });
+
+  const toCollectionRows = (entries: CollectionAdminRecord[]): CollectionExportRow[] =>
+    entries.map((entry) => ({
+      householdId: entry.householdId,
+      householdName: entry.householdName,
+      purok: entry.householdPurok,
+      collectionDate: entry.timestamp,
+      weightKg: Number(entry.weightKg),
+      segregationStatus: entry.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated',
+      wasteType: toWasteLabel(entry.wasteType),
+      collector: entry.collectorName,
+      remarks: entry.editedAt ? 'Edited after submission' : '',
+    }));
+
+  const toComplianceRows = (entries: CollectionAdminRecord[]): ComplianceExportRow[] => {
+    const byHousehold = new Map<string, CollectionAdminRecord[]>();
+    for (const entry of entries) {
+      const list = byHousehold.get(entry.householdId) ?? [];
+      list.push(entry);
+      byHousehold.set(entry.householdId, list);
+    }
+    return [...byHousehold.entries()].map(([householdId, list]) => {
+      const segregated = list.filter((entry) => entry.segregationStatus === 'segregated').length;
+      const latest = list
+        .map((entry) => new Date(entry.timestamp).getTime())
+        .sort((a, b) => b - a)[0];
+      return {
+        householdId,
+        householdName: list[0]?.householdName ?? householdId,
+        purok: list[0]?.householdPurok ?? '',
+        totalCollections: list.length,
+        segregatedCount: segregated,
+        complianceRate: `${Math.round((segregated / list.length) * 100)}%`,
+        lastCollection: Number.isFinite(latest)
+          ? new Date(latest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : '—',
+      };
+    });
+  };
+
+  const fetchEntriesForPeriod = async (): Promise<CollectionAdminRecord[]> => {
+    let from = '';
+    let to = '';
+    if (period === 'weekly') {
+      const start = startOfWeek(selectedWeek);
+      from = start.toISOString();
+      to = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (period === 'monthly') {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      from = new Date(year, month - 1, 1).toISOString();
+      to = new Date(year, month, 1).toISOString();
+    } else {
+      from = new Date(selectedYear, 0, 1).toISOString();
+      to = new Date(selectedYear + 1, 0, 1).toISOString();
+    }
+    const params = `?limit=1000&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const result = await adminApi.allCollections(params);
+    return result.items ?? [];
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
+    setExportError('');
     try {
-      const { exportReportToExcel } = await import('../../lib/reportExport');
-      exportReportToExcel(reportData);
+      const { exportDetailedReport } = await import('../../lib/reportExport');
+      const entries = await fetchEntriesForPeriod();
+      exportDetailedReport(exportKind, periodLabel, toCollectionRows(entries), toComplianceRows(entries));
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  const { summary, weeklyCollection, wasteDistribution, monthlyPerformance } = reportData;
+  const { summary, wasteDistribution } = reportData;
+  const weeklyCollection = filteredWeekly;
+  const monthlyPerformance = filteredMonthly;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
@@ -207,35 +345,108 @@ export default function ReportsPage() {
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Reports & Analysis</h2>
             <p className="text-gray-600">View comprehensive waste management analytics and reports</p>
           </div>
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isExporting ? 'Preparing...' : 'Export to Excel'}
-          </button>
+          <div className="flex flex-col gap-3 sm:items-end">
+            <label className="text-sm font-semibold text-gray-700">
+              Export data
+              <select
+                value={exportKind}
+                onChange={(e) => setExportKind(e.target.value as DetailedExportKind)}
+                className="ml-2 rounded-xl border border-green-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none focus:border-green-500"
+              >
+                {EXPORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={handleExport}
+              disabled={isExporting}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isExporting ? 'Preparing...' : 'Export to Excel'}
+            </button>
+          </div>
+        </div>
+
+        {exportError && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {exportError}
+          </div>
+        )}
+
+        {/* Period filter */}
+        <div className="mb-8 rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
+          <div className="flex flex-wrap items-center gap-3">
+            {(['weekly', 'monthly', 'yearly'] as ReportPeriod[]).map((option) => (
+              <button
+                key={option}
+                onClick={() => setPeriod(option)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize transition ${
+                  period === option
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+            <span className="ml-1 text-sm font-medium text-gray-500">{periodLabel}</span>
+            <div className="ml-auto flex items-center gap-2">
+              {period === 'weekly' && (
+                <input
+                  type="date"
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(e.target.value)}
+                  className="rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                  aria-label="Select week"
+                />
+              )}
+              {period === 'monthly' && (
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                  aria-label="Select month"
+                />
+              )}
+              {period === 'yearly' && (
+                <input
+                  type="number"
+                  value={selectedYear}
+                  min={2020}
+                  max={2100}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="w-28 rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-green-500"
+                  aria-label="Select year"
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.totalHouseholds.toLocaleString()}</div>
-            <p className="text-gray-600 font-medium">Total Households</p>
+            <p className="text-base text-gray-700 font-medium">Total Households</p>
             <p className="text-sm text-green-600">{summary.householdsDelta}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.activeCollectors.toLocaleString()}</div>
-            <p className="text-gray-600 font-medium">Active Collectors</p>
+            <p className="text-base text-gray-700 font-medium">Active Collectors</p>
             <p className="text-sm text-green-600">{summary.collectorsDelta}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{formatKg(summary.wasteCollectedKg)}</div>
-            <p className="text-gray-600 font-medium">Waste Collected (kg)</p>
+            <p className="text-base text-gray-700 font-medium">Waste Collected (kg)</p>
             <p className="text-sm text-green-600">{summary.wasteDelta}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.recycledRate}%</div>
-            <p className="text-gray-600 font-medium">Recycled Rate</p>
+            <p className="text-base text-gray-700 font-medium">Recycled Rate</p>
             <p className="text-sm text-green-600">{summary.recycledDelta}</p>
           </div>
         </div>

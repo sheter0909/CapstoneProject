@@ -34,12 +34,21 @@ export default function GarbageCollectorHomeScreen() {
     .filter((item) => item._id === 'non_biodegradable' || item._id === 'not_segregated')
     .reduce((sum, item) => sum + Number(item.totalKg || 0), 0);
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.profileCard}>
+        <Text style={styles.greeting}>{greeting}!</Text>
         <Text style={styles.title}>{collectorUser?.fullName || 'Garbage Collector'}</Text>
         <Text style={styles.subtitle}>Collector ID: {collectorUser?.collectorId || 'Pending'}</Text>
       </View>
+
+      <Pressable style={styles.scanHero} onPress={() => router.push('/garbagecollector/quick-scan' as any)}>
+        <Text style={styles.scanHeroTitle}>Quick Scan</Text>
+        <Text style={styles.scanHeroSubtitle}>Scan a household QR code to start a collection</Text>
+      </Pressable>
 
       <View style={styles.statsCard}>
         <Text style={styles.sectionTitle}>Collection Overview</Text>
@@ -48,8 +57,8 @@ export default function GarbageCollectorHomeScreen() {
         <Text style={styles.statText}>Non-segregated: {nonSegregatedWaste.toFixed(1)} kg</Text>
       </View>
 
-      <Pressable style={styles.actionButton} onPress={() => router.push('/garbagecollector/quick-scan' as any)}>
-        <Text style={styles.actionButtonText}>Quick Scan</Text>
+      <Pressable style={styles.actionButtonSecondary} onPress={() => router.push('/garbagecollector/notifications' as any)}>
+        <Text style={styles.actionButtonSecondaryText}>Notifications</Text>
       </Pressable>
       <Pressable style={styles.actionButtonSecondary} onPress={() => router.push('/garbagecollector/activity-logs' as any)}>
         <Text style={styles.actionButtonSecondaryText}>Activity Logs</Text>
@@ -77,10 +86,36 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
   },
+  greeting: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#4A7A52',
+  },
   title: {
     fontSize: 28,
     fontWeight: '800',
     color: '#1F7A37',
+  },
+  scanHero: {
+    backgroundColor: '#1F7A37',
+    borderRadius: 24,
+    padding: Spacing.four,
+    gap: 4,
+    alignItems: 'center',
+    shadowColor: '#1F7A37',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  scanHeroTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  scanHeroSubtitle: {
+    fontSize: 14,
+    color: '#D6F3D1',
   },
   subtitle: {
     color: '#4A4A4A',

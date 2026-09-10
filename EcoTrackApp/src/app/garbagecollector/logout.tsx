@@ -23,7 +23,7 @@ export default function GarbageCollectorLogoutScreen() {
           <Text style={styles.primaryButtonText}>Log out</Text>
         </Pressable>
 
-        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector/home')}>
+        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
           <Text style={styles.backText}>Back</Text>
         </Pressable>
       </View>

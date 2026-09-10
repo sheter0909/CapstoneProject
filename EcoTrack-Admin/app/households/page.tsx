@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Modal from '../../components/Modal';
-import { addActivity, formatActivityTimestamp } from '../../lib/activity';
+import { addActivity } from '../../lib/activity';
 import { adminApi, ApiError } from '../../lib/api';
 
 interface Household {
@@ -58,6 +58,12 @@ export default function HouseholdsPage() {
   const [showRegisterSuccess, setShowRegisterSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
+  const stripPassword = <T extends { password?: unknown }>(item: T): Omit<T, 'password'> => {
+    const { password: _password, ...rest } = item;
+    void _password;
+    return rest;
+  };
+
   const visibleHouseholds = households.filter((household) => household.status !== 'archived');
 
   const filteredHouseholds = visibleHouseholds.filter((household) => {
@@ -96,7 +102,6 @@ export default function HouseholdsPage() {
               unit: account.address,
               purok: account.purok,
               birthdate: account.birthdate ?? '',
-              password: account.password ?? '',
               joinDate: account.joinDate,
               status: account.status,
             }))
@@ -203,9 +208,8 @@ export default function HouseholdsPage() {
         ...selectedHousehold,
         name: account.fullName,
         purok: account.purok,
-        unit: account.address,
+        unit: account.birthdate ?? formData.unit.trim(),
         birthdate: account.birthdate ?? formData.unit.trim(),
-        password: account.password ?? formData.password,
       };
 
       const updatedHouseholds = households.map((h) => (h.id === selectedHousehold.id ? updatedHousehold : h));
@@ -269,7 +273,7 @@ export default function HouseholdsPage() {
         id: account.id,
         email: account.householdId,
         name: account.fullName,
-        unit: account.address,
+        unit: account.birthdate ?? pendingNewHousehold.unit,
         purok: account.purok,
         joinDate: account.joinDate,
         status: account.status
@@ -308,7 +312,7 @@ export default function HouseholdsPage() {
   const doUpdateHousehold = (updated: Household) => {
     const list = households.map(h => (h.id === updated.id ? updated : h));
     setHouseholds(list);
-    localStorage.setItem('households', JSON.stringify(list));
+    localStorage.setItem('households', JSON.stringify(list.map(stripPassword)));
     setFormData({ name: '', email: '', unit: '', password: '', purok: '' });
     setShowForm(false);
     setIsEditing(false);
@@ -320,7 +324,7 @@ export default function HouseholdsPage() {
   const handleDeleteHousehold = (id: string) => {
     const updatedHouseholds = households.filter(h => h.id !== id);
     setHouseholds(updatedHouseholds);
-    localStorage.setItem('households', JSON.stringify(updatedHouseholds));
+    localStorage.setItem('households', JSON.stringify(updatedHouseholds.map(stripPassword)));
     setSelectedHousehold(null);
   };
 
@@ -341,14 +345,14 @@ export default function HouseholdsPage() {
       h.id === selectedHousehold.id ? { ...h, status: nextStatus, previousStatus: nextPreviousStatus } : h
     );
     setHouseholds(updated);
-    localStorage.setItem('households', JSON.stringify(updated));
+    localStorage.setItem('households', JSON.stringify(updated.map(stripPassword)));
     setSelectedHousehold({ ...selectedHousehold, status: nextStatus, previousStatus: nextPreviousStatus });
     setShowArchiveConfirm(false);
     setShowDeleteConfirm(false);
     setShowUpdateSuccess(true);
     const message = isRestoring ? 'Household restored successfully' : 'Household archived successfully';
     setToastMessage(message);
-    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} household ${selectedHousehold.name} — ${formatActivityTimestamp(new Date())}`, adminUser?.name || 'Admin User', 'Account Update');
+    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} household ${selectedHousehold.name}`, adminUser?.name || 'Admin User', 'Account Update');
     setTimeout(() => {
       setToastMessage(null);
       setShowUpdateSuccess(false);
@@ -361,7 +365,7 @@ export default function HouseholdsPage() {
       name: household.name,
       email: household.email,
       unit: household.birthdate || '',
-      password: household.password || '',
+      password: '',
       purok: household.purok || '',
     });
     setFormErrors({});
@@ -662,7 +666,7 @@ export default function HouseholdsPage() {
                       <tr key={household.id} className={index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}>
                         <td className="break-words px-2 py-4 text-sm text-gray-600 sm:px-3">{household.email}</td>
                         <td className="break-words px-2 py-4 text-sm font-semibold text-gray-900 sm:px-3">{household.name}</td>
-                        <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{household.unit}</td>
+                        <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{household.purok}</td>
                         <td className="break-words px-2 py-4 text-sm sm:px-3">
                           <span
                             className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${

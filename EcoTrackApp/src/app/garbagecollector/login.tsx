@@ -12,8 +12,10 @@ export default function GarbageCollectorLoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
+    if (isLoading) return;
     setError('');
 
     if (!collectorId.trim() || !password.trim()) {
@@ -21,14 +23,19 @@ export default function GarbageCollectorLoginScreen() {
       return;
     }
 
-    const result = await loginCollector(collectorId, password);
+    setIsLoading(true);
+    try {
+      const result = await loginCollector(collectorId, password);
 
-    if (!result.success) {
-      setError(result.error ?? 'Invalid Collector ID or Password.');
-      return;
+      if (!result.success) {
+        setError(result.error ?? 'Invalid Collector ID or Password.');
+        return;
+      }
+
+      router.push('/garbagecollector' as any);
+    } finally {
+      setIsLoading(false);
     }
-
-    router.push('/garbagecollector' as any);
   };
 
   return (
@@ -85,8 +92,12 @@ export default function GarbageCollectorLoginScreen() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <Pressable style={styles.primaryButton} onPress={handleLogin}>
-            <Text style={styles.primaryButtonText}>LOGIN</Text>
+          <Pressable
+            style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            <Text style={styles.primaryButtonText}>{isLoading ? 'LOGGING IN...' : 'LOGIN'}</Text>
           </Pressable>
 
           <Pressable style={styles.ghostButton} onPress={() => router.push('/garbagecollector/forgot-password' as any)}>
@@ -227,6 +238,9 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 16,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   ghostButton: {
     alignItems: 'center',

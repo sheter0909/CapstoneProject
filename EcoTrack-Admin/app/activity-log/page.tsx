@@ -115,7 +115,9 @@ export default function ActivityLogPage() {
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
+    const datePart = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const timePart = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return `${datePart} • ${timePart}`;
   };
 
   if (isLoading) {

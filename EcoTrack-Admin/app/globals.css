@@ -3,6 +3,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* EcoTrack design tokens */
+  --eco-primary: #1f7a37;
+  --eco-primary-dark: #14532d;
+  --eco-primary-light: #e8f5e9;
+  --eco-accent: #0d9488;
+  --eco-success: #15803d;
+  --eco-warning: #b45309;
+  --eco-danger: #b91c1c;
+  --eco-info: #1d4ed8;
+  --eco-ink: #1c2420;
+  --eco-muted: #5b6660;
+  --eco-surface: #ffffff;
+  --eco-surface-soft: #f3f9f4;
+  --eco-border: #dcebe0;
+  --eco-radius: 18px;
 }
 
 @theme inline {
@@ -12,15 +28,76 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Readable base typography */
+table {
+  font-size: 0.9375rem;
+}
+
+th {
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+}
+
+/* Pointer cursor on every interactive element (Part 24) */
+button:not(:disabled),
+a[href],
+select,
+input[type="date"],
+input[type="month"],
+input[type="number"],
+input[type="checkbox"],
+input[type="radio"],
+[role="button"],
+[role="tab"],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Consistent, visible focus feedback for keyboard users */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--eco-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Subtle press feedback */
+button:active:not(:disabled),
+a:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  button:active:not(:disabled),
+  a:active {
+    transform: none;
+  }
 }

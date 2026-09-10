@@ -77,7 +77,7 @@ export default function HouseholdHistoryScreen() {
           </>
         )}
 
-        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/household/home')}>
+        <Pressable style={styles.backButton} onPress={() => safeBack(router, '/household')}>
           <Text style={styles.backText}>Back to Dashboard</Text>
         </Pressable>
       </View>

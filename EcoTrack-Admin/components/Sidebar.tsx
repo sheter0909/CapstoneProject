@@ -81,6 +81,17 @@ const menuItems = [
       </svg>
     ),
   },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    href: '/notifications',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 20a2 2 0 0 0 4 0" />
+      </svg>
+    ),
+  },
 ];
 
 export default function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
@@ -133,6 +144,7 @@ export default function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                 <Link
                   href={item.href}
                   onClick={onClose}
+                  aria-current={isActive(item.href) ? 'page' : undefined}
                   className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all ${
                     isActive(item.href)
                       ? 'bg-green-50 text-green-700 shadow-sm ring-1 ring-green-200'

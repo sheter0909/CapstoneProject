@@ -52,6 +52,39 @@ export interface CollectorCollectionHistory {
   collections: CollectorCollectionRecord[];
 }
 
+export type NotificationRecipientType = 'household' | 'collector' | 'all-households' | 'all-collectors';
+
+export interface AdminNotification {
+  id: string;
+  householdId?: string | null;
+  collectorId?: string | null;
+  senderId: string;
+  senderRole: string;
+  senderName: string;
+  recipientType: string;
+  title: string;
+  message: string;
+  level: string;
+  read: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollectionAdminRecord {
+  id: string;
+  householdId: string;
+  collectorId: string;
+  segregationStatus: 'segregated' | 'not_segregated';
+  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable';
+  weightKg: number;
+  timestamp: string;
+  editedAt?: string | null;
+  householdName: string;
+  householdPurok: string;
+  householdAddress: string;
+  collectorName: string;
+}
+
 let connectingState: ApiConnectingState = { status: 'idle', attempt: 0, totalRetries: MAX_RETRIES, path: '' };
 const connectingListeners = new Set<(state: ApiConnectingState) => void>();
 
@@ -164,9 +197,14 @@ export const adminApi = {
   dashboardStats: () => apiRequest<unknown>('/dashboard/stats'),
   recentActivity: () => apiRequest<unknown>('/dashboard/recent-activity'),
   householdCollections: (id: string) => apiRequest<unknown[]>(`/households/${encodeURIComponent(id)}/collections`),
+  allCollections: (query = '') => apiRequest<{ items: CollectionAdminRecord[]; total: number; page: number; totalPages: number }>(`/collections${query}`),
   collectorCollections: (id: string) => apiRequest<CollectorCollectionHistory>(`/collectors/${encodeURIComponent(id)}/collections`),
   reportSummary: () => apiRequest<{ totalHouseholds: number; activeCollectors: number; wasteCollected: number; recycledRate: number }>('/reports/summary'),
   reportWeeklyCollection: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/weekly-collection'),
   reportWasteTypeDistribution: () => apiRequest<{ _id: string; weightKg: number }[]>('/reports/waste-type-distribution'),
   reportMonthlyPerformance: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/monthly-performance'),
+  notifications: (query = '') => apiRequest<{ items: AdminNotification[]; total: number; page: number; totalPages: number }>(`/notifications${query}`),
+  sendNotification: (body: { title: string; message: string; recipientType: NotificationRecipientType; householdId?: string; collectorId?: string; level?: string }) =>
+    apiRequest<AdminNotification>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+  markNotificationRead: (id: string) => apiRequest<AdminNotification>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
 };

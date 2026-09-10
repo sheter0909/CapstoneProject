@@ -96,16 +96,23 @@ model CollectionEntry {
 }
 
 model Notification {
-  id          String   @id @default(uuid())
-  householdId String
-  title       String
-  message     String
-  level       String   @default("Level 1 Reminder")
-  read        Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(uuid())
+  householdId   String?
+  collectorId   String?
+  senderId      String   @default("")
+  senderRole    String   @default("admin")
+  senderName    String   @default("Admin")
+  recipientType String   @default("household")
+  title         String
+  message       String
+  level         String   @default("Level 1 Reminder")
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([householdId])
+  @@index([collectorId])
+  @@index([recipientType])
 }
 
 model ActivityLog {
