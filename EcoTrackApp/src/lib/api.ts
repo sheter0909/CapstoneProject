@@ -1,4 +1,17 @@
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'https://capstoneproject-oksk.onrender.com/api').replace(/\/+$/, '');
+const configuredApiUrl = (process.env.EXPO_PUBLIC_API_URL ?? 'https://capstoneproject-oksk.onrender.com/api').replace(/\/+$/, '');
+const API_URL = configuredApiUrl.endsWith('/api') ? configuredApiUrl : `${configuredApiUrl}/api`;
+
+export function getApiBaseUrl(): string {
+  return API_URL;
+}
+
+let apiBaseLogged = false;
+function logApiBaseOnce() {
+  if (!apiBaseLogged && (globalThis as { __DEV__?: boolean }).__DEV__) {
+    apiBaseLogged = true;
+    console.warn(`[EcoTrack] API base URL resolved to: ${API_URL}`);
+  }
+}
 const REQUEST_TIMEOUT_MS = 90_000;
 
 export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: unknown };
@@ -54,6 +67,7 @@ function sleep(ms: number) {
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = options.method ?? 'GET';
   let lastError: Error | null = null;
+  logApiBaseOnce();
 
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     let response: Response;
@@ -89,7 +103,10 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     if (payload?.message) throw new Error(payload.message);
 
     // No usable message (e.g. a proxy/idle-server HTML page): transient, retry.
-    lastError = new Error(`API request failed (${response.status} ${method} ${path})`);
+    lastError = new Error(`API request failed (${response.status} ${method} ${API_URL}${path})`);
+    if ((globalThis as { __DEV__?: boolean }).__DEV__) {
+      console.warn(`[EcoTrack] ${method} ${API_URL}${path} -> HTTP ${response.status} with non-JSON body. Check EXPO_PUBLIC_API_URL.`);
+    }
     if (attempt < RETRY_DELAYS_MS.length) {
       await sleep(RETRY_DELAYS_MS[attempt]);
       continue;
