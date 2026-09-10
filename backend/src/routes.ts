@@ -255,6 +255,34 @@ router.get('/reports/monthly-performance', requireAuth('admin'), reportByPeriod(
 
 router.get('/households/:id/summary', requireAuth('collector'), async (req, res, next) => { try { const householdId = String(req.params.id); const account = await prisma.household.findUnique({ where: { householdId } }); return ok(res, { household: account ? publicAccount(account) : null, history: await prisma.collectionEntry.findMany({ where: { householdId }, orderBy: { timestamp: 'desc' }, take: 10 }) }); } catch (error) { next(error); } });
 router.get('/households/:id/collections', requireAuth('admin'), async (req, res, next) => { try { return ok(res, await prisma.collectionEntry.findMany({ where: { householdId: String(req.params.id) }, orderBy: { timestamp: 'desc' } })); } catch (error) { next(error); } });
+router.get('/collectors/:id/collections', requireAuth('admin'), async (req, res, next) => {
+  try {
+    const collectorId = String(req.params.id);
+    const collector = await prisma.garbageCollector.findFirst({ where: { collectorId } });
+    if (!collector) return fail(res, 404, 'Collector not found.');
+    const entries = await prisma.collectionEntry.findMany({ where: { collectorId }, orderBy: { timestamp: 'desc' } });
+    const householdIds = [...new Set(entries.map((entry) => entry.householdId))];
+    const households = householdIds.length
+      ? await prisma.household.findMany({ where: { householdId: { in: householdIds } } })
+      : [];
+    const householdById = new Map(households.map((household) => [household.householdId, household]));
+    return ok(res, {
+      collector: { collectorId: collector.collectorId, fullName: collector.fullName },
+      collections: entries.map((entry) => {
+        const household = householdById.get(entry.householdId);
+        return {
+          ...entry,
+          weightKg: Number(entry.weightKg),
+          householdName: household?.fullName ?? entry.householdId,
+          householdPurok: household?.purok ?? '',
+          householdAddress: household?.address ?? '',
+        };
+      }),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 router.post('/collections', requireAuth('collector'), collectionFields, validateRequest, async (req, res, next) => { try { const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); const existing = await prisma.collectionEntry.findFirst({ where: { householdId: req.body.householdId, timestamp: { gte: sevenDaysAgo } } }); if (existing) return fail(res, 409, 'This household was already collected this week.'); const entry = await prisma.collectionEntry.create({ data: { householdId: req.body.householdId, collectorId: req.user!.id, segregationStatus: req.body.segregationStatus, wasteType: req.body.wasteType, weightKg: req.body.weightKg } }); await prisma.household.update({ where: { householdId: req.body.householdId }, data: { lastCollection: entry.timestamp } }); return created(res, entry); } catch (error) { next(error); } });
 router.put('/collections/:id', requireAuth('collector'), [idParam, ...collectionFields], validateRequest, async (req, res, next) => { try { const entry = await prisma.collectionEntry.findUnique({ where: { id: String(req.params.id) } }); if (!entry || entry.collectorId !== req.user!.id) return fail(res, 404, 'Collection entry not found.'); if (Date.now() - entry.timestamp.getTime() > 2 * 60 * 60 * 1000) return fail(res, 403, 'Edit window has expired for this entry.'); const updated = await prisma.collectionEntry.update({ where: { id: entry.id }, data: { segregationStatus: req.body.segregationStatus, wasteType: req.body.wasteType, weightKg: req.body.weightKg, editedAt: new Date() } }); return ok(res, updated, 'Collection entry updated.'); } catch (error) { next(error); } });
 router.get('/collectors/me/activity-logs', requireAuth('collector'), pagination, validateRequest, async (req, res, next) => { try { const { page, limit } = paged(req); const where = { collectorId: req.user!.id }; const [items, total] = await Promise.all([prisma.collectionEntry.findMany({ where, orderBy: { timestamp: 'desc' }, skip: (page - 1) * limit, take: limit }), prisma.collectionEntry.count({ where })]); return ok(res, { items, total, page, totalPages: Math.ceil(total / limit) }); } catch (error) { next(error); } });

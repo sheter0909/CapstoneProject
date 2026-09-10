@@ -4,7 +4,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
 import { addActivity, formatActivityTimestamp } from '../../lib/activity';
-import { adminApi, ApiError } from '../../lib/api';
+import { adminApi, ApiError, type CollectorCollectionRecord } from '../../lib/api';
 import { useApiConnecting } from '../../lib/useApiConnecting';
 
 interface GarbageCollector {
@@ -37,6 +37,9 @@ export default function GarbageCollectorsPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<CollectorCollectionRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -203,6 +206,21 @@ export default function GarbageCollectorsPage() {
     setSelectedCollector(newCollector);
     setToastMessage('Garbage Collector added successfully');
     setTimeout(() => setToastMessage(null), 2200);
+  };
+
+  const handleViewHistory = async (collector: GarbageCollector) => {
+    setShowHistoryModal(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setHistoryRecords([]);
+    try {
+      const result = await adminApi.collectorCollections(collector.id);
+      setHistoryRecords(result.collections ?? []);
+    } catch (error) {
+      setHistoryError(error instanceof ApiError ? error.message : 'Unable to load collection history.');
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const handleEdit = (collector: GarbageCollector) => {
@@ -658,7 +676,7 @@ export default function GarbageCollectorsPage() {
                 </div>
 
                 <button
-                  onClick={() => setShowHistoryModal(true)}
+                  onClick={() => selectedCollector && void handleViewHistory(selectedCollector)}
                   className="mt-3 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
                 >
                   View History
@@ -689,13 +707,65 @@ export default function GarbageCollectorsPage() {
 
       <Modal
         open={showHistoryModal}
-        title="Collector Activity History"
-        message="Recent collection and attendance history for this collector."
+        title={`Collection History — ${selectedCollector?.name ?? ''}`}
+        message={`Households scanned/collected by ${selectedCollector?.name ?? 'this collector'} (${selectedCollector?.id ?? ''}).`}
         actions={[{ label: 'Close', onClick: () => setShowHistoryModal(false) }]}
       >
-        <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
-          No historical records available in this demo.
-        </div>
+        {historyLoading ? (
+          <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-center text-sm text-gray-600">
+            Loading collection history...
+          </div>
+        ) : historyError ? (
+          <div className="mt-4 rounded-2xl bg-red-50 p-4 text-center text-sm font-semibold text-red-600">
+            {historyError}
+          </div>
+        ) : historyRecords.length === 0 ? (
+          <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-center text-sm text-gray-600">
+            No collections recorded by this collector yet.
+          </div>
+        ) : (
+          <div className="mt-4 max-h-96 overflow-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Household</th>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Purok</th>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Waste</th>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Weight</th>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Status</th>
+                  <th className="px-3 py-2 font-semibold text-gray-700">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyRecords.map((record) => (
+                  <tr key={record.id} className="border-t border-gray-100">
+                    <td className="px-3 py-2">
+                      <div className="font-semibold text-gray-800">{record.householdName}</div>
+                      <div className="text-xs text-gray-500">{record.householdId}</div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{record.householdPurok || '—'}</td>
+                    <td className="px-3 py-2 capitalize text-gray-600">{record.wasteType.replace(/_/g, ' ')}</td>
+                    <td className="px-3 py-2 text-gray-600">{record.weightKg} kg</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          record.segregationStatus === 'segregated'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {record.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {new Date(record.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Modal>
 
       {toastMessage && (
