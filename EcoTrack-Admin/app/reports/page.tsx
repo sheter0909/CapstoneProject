@@ -2,16 +2,159 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { adminApi } from '../../lib/api';
+import type { ReportData, SummaryRow, WeeklyCollectionRow, WasteDistributionRow, MonthlyPerformanceRow } from '../../lib/reportExport';
 
-interface AdminUser {
-  email: string;
-  name: string;
+const INITIAL_SUMMARY: SummaryRow = {
+  totalHouseholds: 156,
+  householdsDelta: '+12 this month',
+  activeCollectors: 28,
+  collectorsDelta: '+3 this month',
+  wasteCollectedKg: 2400,
+  wasteDelta: '+18% this month',
+  recycledRate: 94,
+  recycledDelta: '+2% this month',
+};
+
+const INITIAL_WEEKLY: WeeklyCollectionRow[] = [
+  { day: 'Monday', kg: 240 },
+  { day: 'Tuesday', kg: 310 },
+  { day: 'Wednesday', kg: 185 },
+  { day: 'Thursday', kg: 275 },
+  { day: 'Friday', kg: 225 },
+];
+
+const INITIAL_DISTRIBUTION: WasteDistributionRow[] = [
+  { type: 'Recyclable', percent: 45 },
+  { type: 'Organic', percent: 30 },
+  { type: 'Plastic', percent: 15 },
+  { type: 'Other', percent: 10 },
+];
+
+const INITIAL_MONTHLY: MonthlyPerformanceRow[] = [
+  { month: 'July 2024', totalKg: 2240, householdsActive: 144, recycledRate: '92%', trend: '↑ 8%' },
+  { month: 'June 2024', totalKg: 2075, householdsActive: 138, recycledRate: '88%', trend: '↑ 5%' },
+  { month: 'May 2024', totalKg: 1976, householdsActive: 132, recycledRate: '85%', trend: '↑ 12%' },
+];
+
+const INITIAL_REPORT: ReportData = {
+  summary: INITIAL_SUMMARY,
+  weeklyCollection: INITIAL_WEEKLY,
+  wasteDistribution: INITIAL_DISTRIBUTION,
+  monthlyPerformance: INITIAL_MONTHLY,
+};
+
+interface SummaryPayload {
+  totalHouseholds: number;
+  activeCollectors: number;
+  wasteCollected: number;
+  recycledRate: number;
+}
+
+interface PeriodPayload {
+  _id: string;
+  totalKg: number;
+}
+
+interface DistributionPayload {
+  _id: string;
+  weightKg: number;
+}
+
+function toWeekdayLabel(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function toMonthLabel(monthStr: string): string {
+  const [year, month] = monthStr.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function toWasteTypeLabel(raw: string): string {
+  if (raw === 'biodegradable') return 'Biodegradable';
+  if (raw === 'recyclable') return 'Recyclable';
+  if (raw === 'non_biodegradable' || raw === 'non-biodegradable') return 'Non-biodegradable';
+  return raw;
+}
+
+function computeWasteDelta(monthly: PeriodPayload[], fallback: string): string {
+  const sorted = [...monthly].sort((a, b) => a._id.localeCompare(b._id));
+  if (sorted.length < 2) return fallback;
+  const latest = Number(sorted[sorted.length - 1].totalKg);
+  const previous = Number(sorted[sorted.length - 2].totalKg);
+  if (!previous) return fallback;
+  const change = ((latest - previous) / previous) * 100;
+  const sign = change >= 0 ? '+' : '';
+  return `${sign}${change.toFixed(0)}% this month`;
+}
+
+function buildReportData(
+  summary: SummaryPayload,
+  weekly: PeriodPayload[],
+  distribution: DistributionPayload[],
+  monthly: PeriodPayload[],
+  fallback: ReportData,
+): ReportData {
+  const recentDays = [...weekly]
+    .sort((a, b) => a._id.localeCompare(b._id))
+    .slice(-7)
+    .map(({ _id, totalKg }) => ({ day: toWeekdayLabel(_id), date: _id, kg: Number(totalKg) }));
+
+  const totalWeight = distribution.reduce((sum, entry) => sum + Number(entry.weightKg), 0);
+  const wasteTypes = distribution
+    .map(({ _id, weightKg }) => ({
+      type: toWasteTypeLabel(_id),
+      percent: totalWeight ? Math.round((Number(weightKg) / totalWeight) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.percent - a.percent);
+
+  const monthlyRows = [...monthly]
+    .sort((a, b) => a._id.localeCompare(b._id))
+    .slice(-12)
+    .reverse()
+    .map(({ _id, totalKg }) => {
+      const label = toMonthLabel(_id);
+      const prev = fallback.monthlyPerformance.find((row) => row.month === label);
+      return {
+        month: label,
+        totalKg: Number(totalKg),
+        householdsActive: prev?.householdsActive ?? '—',
+        recycledRate: prev?.recycledRate ?? '—',
+        trend: prev?.trend ?? '—',
+      };
+    });
+
+  return {
+    summary: {
+      totalHouseholds: summary.totalHouseholds,
+      householdsDelta: fallback.summary.householdsDelta,
+      activeCollectors: summary.activeCollectors,
+      collectorsDelta: fallback.summary.collectorsDelta,
+      wasteCollectedKg: summary.wasteCollected,
+      wasteDelta: computeWasteDelta(monthly, fallback.summary.wasteDelta),
+      recycledRate: Math.round(summary.recycledRate * 10) / 10,
+      recycledDelta: fallback.summary.recycledDelta,
+    },
+    weeklyCollection: recentDays,
+    wasteDistribution: wasteTypes,
+    monthlyPerformance: monthlyRows,
+  };
+}
+
+function formatKg(kg: number): string {
+  if (kg >= 1000) return `${(kg / 1000).toFixed(1)}K`;
+  return kg.toLocaleString();
+}
+
+function weekProgressPercent(kg: number): number {
+  const max = Math.max(...INITIAL_WEEKLY.map((row) => row.kg), kg, 1);
+  return Math.max(8, Math.min(100, Math.round((kg / max) * 100)));
 }
 
 export default function ReportsPage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [reportData, setReportData] = useState<ReportData>(INITIAL_REPORT);
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
@@ -21,56 +164,79 @@ export default function ReportsPage() {
       router.push('/login');
     } else {
       try {
-        const user = JSON.parse(userStr);
-        setAdminUser(user);
+        JSON.parse(userStr);
       } catch {
         router.push('/login');
       }
     }
-
-    setIsLoading(false);
   }, [router]);
 
-  if (isLoading) {
-    return (
-      <main className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-        <div className="text-center">
-          <p className="text-gray-600 text-lg">Loading...</p>
-        </div>
-      </main>
-    );
-  }
+  useEffect(() => {
+    Promise.all([
+      adminApi.reportSummary(),
+      adminApi.reportWeeklyCollection(),
+      adminApi.reportWasteTypeDistribution(),
+      adminApi.reportMonthlyPerformance(),
+    ])
+      .then(([summary, weekly, distribution, monthly]) => {
+        setReportData((current) => buildReportData(summary, weekly, distribution, monthly, current));
+      })
+      .catch(() => {
+        // Keep the current (fallback) data when the backend is unavailable.
+      });
+  }, []);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const { exportReportToExcel } = await import('../../lib/reportExport');
+      exportReportToExcel(reportData);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const { summary, weeklyCollection, wasteDistribution, monthlyPerformance } = reportData;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Title */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">Reports & Analysis</h2>
-          <p className="text-gray-600">View comprehensive waste management analytics and reports</p>
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">Reports & Analysis</h2>
+            <p className="text-gray-600">View comprehensive waste management analytics and reports</p>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isExporting ? 'Preparing...' : 'Export to Excel'}
+          </button>
         </div>
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="text-3xl font-bold text-green-600 mb-2">156</div>
+            <div className="text-3xl font-bold text-green-600 mb-2">{summary.totalHouseholds.toLocaleString()}</div>
             <p className="text-gray-600 font-medium">Total Households</p>
-            <p className="text-sm text-green-600">+12 this month</p>
+            <p className="text-sm text-green-600">{summary.householdsDelta}</p>
           </div>
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="text-3xl font-bold text-green-600 mb-2">28</div>
+            <div className="text-3xl font-bold text-green-600 mb-2">{summary.activeCollectors.toLocaleString()}</div>
             <p className="text-gray-600 font-medium">Active Collectors</p>
-            <p className="text-sm text-green-600">+3 this month</p>
+            <p className="text-sm text-green-600">{summary.collectorsDelta}</p>
           </div>
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="text-3xl font-bold text-green-600 mb-2">2.4K</div>
+            <div className="text-3xl font-bold text-green-600 mb-2">{formatKg(summary.wasteCollectedKg)}</div>
             <p className="text-gray-600 font-medium">Waste Collected (kg)</p>
-            <p className="text-sm text-green-600">+18% this month</p>
+            <p className="text-sm text-green-600">{summary.wasteDelta}</p>
           </div>
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="text-3xl font-bold text-green-600 mb-2">94%</div>
+            <div className="text-3xl font-bold text-green-600 mb-2">{summary.recycledRate}%</div>
             <p className="text-gray-600 font-medium">Recycled Rate</p>
-            <p className="text-sm text-green-600">+2% this month</p>
+            <p className="text-sm text-green-600">{summary.recycledDelta}</p>
           </div>
         </div>
 
@@ -80,51 +246,20 @@ export default function ReportsPage() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-6">Weekly Waste Collection</h3>
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Monday</span>
-                  <span className="text-sm font-semibold text-gray-800">240 kg</span>
+              {weeklyCollection.length === 0 && (
+                <p className="text-sm text-gray-500">No collection data available yet.</p>
+              )}
+              {weeklyCollection.map((row) => (
+                <div key={row.date ?? row.day}>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-600">{row.day}</span>
+                    <span className="text-sm font-semibold text-gray-800">{row.kg.toLocaleString()} kg</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-green-600 h-2 rounded-full" style={{ width: `${weekProgressPercent(row.kg)}%` }}></div>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '80%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Tuesday</span>
-                  <span className="text-sm font-semibold text-gray-800">310 kg</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '100%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Wednesday</span>
-                  <span className="text-sm font-semibold text-gray-800">185 kg</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '60%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Thursday</span>
-                  <span className="text-sm font-semibold text-gray-800">275 kg</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '89%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Friday</span>
-                  <span className="text-sm font-semibold text-gray-800">225 kg</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: '73%' }}></div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -132,42 +267,20 @@ export default function ReportsPage() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-6">Waste Type Distribution</h3>
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600 font-medium">Recyclable</span>
-                  <span className="text-sm font-semibold text-gray-800">45%</span>
+              {wasteDistribution.length === 0 && (
+                <p className="text-sm text-gray-500">No waste data available yet.</p>
+              )}
+              {wasteDistribution.map((row) => (
+                <div key={row.type}>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-600 font-medium">{row.type}</span>
+                    <span className="text-sm font-semibold text-gray-800">{row.percent}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-3">
+                    <div className="bg-green-600 h-3 rounded-full" style={{ width: `${Math.min(100, Math.max(row.percent, 2))}%` }}></div>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-green-600 h-3 rounded-full" style={{ width: '45%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600 font-medium">Organic</span>
-                  <span className="text-sm font-semibold text-gray-800">30%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-green-500 h-3 rounded-full" style={{ width: '30%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600 font-medium">Plastic</span>
-                  <span className="text-sm font-semibold text-gray-800">15%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-green-400 h-3 rounded-full" style={{ width: '15%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600 font-medium">Other</span>
-                  <span className="text-sm font-semibold text-gray-800">10%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div className="bg-gray-400 h-3 rounded-full" style={{ width: '10%' }}></div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
@@ -187,33 +300,22 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-gray-200 hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">July 2024</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">2,240</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">144</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">92%</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className="text-green-600 font-semibold">↑ 8%</span>
-                  </td>
-                </tr>
-                <tr className="border-b border-gray-200 hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">June 2024</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">2,075</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">138</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">88%</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className="text-green-600 font-semibold">↑ 5%</span>
-                  </td>
-                </tr>
-                <tr className="border-b border-gray-200 hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">May 2024</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">1,976</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">132</td>
-                  <td className="px-6 py-4 text-sm text-gray-800">85%</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className="text-green-600 font-semibold">↑ 12%</span>
-                  </td>
-                </tr>
+                {monthlyPerformance.length === 0 && (
+                  <tr>
+                    <td className="px-6 py-4 text-sm text-gray-500" colSpan={5}>No monthly data available yet.</td>
+                  </tr>
+                )}
+                {monthlyPerformance.map((row) => (
+                  <tr key={row.month} className="border-b border-gray-200 hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-800">{row.month}</td>
+                    <td className="px-6 py-4 text-sm text-gray-800">{row.totalKg.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-gray-800">{row.householdsActive}</td>
+                    <td className="px-6 py-4 text-sm text-gray-800">{row.recycledRate}</td>
+                    <td className="px-6 py-4 text-sm">
+                      {row.trend !== '—' ? <span className="text-green-600 font-semibold">{row.trend}</span> : <span className="text-gray-400">—</span>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

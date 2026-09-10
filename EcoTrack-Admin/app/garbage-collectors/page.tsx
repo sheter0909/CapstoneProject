@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { QRCodeSVG } from 'qrcode.react';
 import Modal from '../../components/Modal';
 import { addActivity, formatActivityTimestamp } from '../../lib/activity';
 import { adminApi, ApiError } from '../../lib/api';
@@ -35,7 +34,6 @@ export default function GarbageCollectorsPage() {
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showQR, setShowQR] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -567,7 +565,6 @@ export default function GarbageCollectorsPage() {
                           <button
                             onClick={() => {
                               setSelectedCollector(collector);
-                              setShowQR(false);
                             }}
                             className="inline-flex items-center rounded-full border border-green-200 px-3 py-1.5 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                           >
@@ -631,13 +628,6 @@ export default function GarbageCollectorsPage() {
 
                 <div className="mt-6 space-y-3">
                   <button
-                    onClick={() => setShowQR(!showQR)}
-                    className="w-full rounded-2xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700"
-                  >
-                    {showQR ? 'Hide QR Code' : 'Show QR Code'}
-                  </button>
-
-                  <button
                     onClick={() => handleEdit(selectedCollector)}
                     className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                   >
@@ -651,12 +641,6 @@ export default function GarbageCollectorsPage() {
                     {selectedCollector.status === 'archived' ? 'Unarchive' : 'Archive'}
                   </button>
                 </div>
-
-                {showQR && (
-                  <div className="mt-6 flex justify-center rounded-[24px] border border-gray-100 bg-gray-50 p-4">
-                    <QRCodeSVG id={`qr-collector-${selectedCollector.id}`} value={`collector-${selectedCollector.id}`} size={180} />
-                  </div>
-                )}
 
                 <button
                   onClick={() => setShowHistoryModal(true)}

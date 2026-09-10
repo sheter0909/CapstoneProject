@@ -10,6 +10,7 @@ export default function GarbageCollectorLoginScreen() {
   const { loginCollector } = useAuth();
   const [collectorId, setCollectorId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
@@ -68,11 +69,17 @@ export default function GarbageCollectorLoginScreen() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 placeholder="Enter password"
                 placeholderTextColor="#9AA39A"
                 style={styles.inputWithIconField}
               />
+              <Pressable
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
+              </Pressable>
             </View>
           </View>
 

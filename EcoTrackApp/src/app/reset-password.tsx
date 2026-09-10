@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 
@@ -9,6 +10,8 @@ export default function ResetPasswordScreen() {
   const { resetHouseholdPassword, householdResetAccountId } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -53,25 +56,41 @@ export default function ResetPasswordScreen() {
             <>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Create new password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="At least 8 characters"
-                  placeholderTextColor="#999"
-                  secureTextEntry
-                />
+                <View style={styles.passwordInput}>
+                  <TextInput
+                    style={styles.passwordField}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="At least 8 characters"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showPassword}
+                  />
+                  <Pressable
+                    accessibilityLabel={showPassword ? 'Hide new password' : 'Show new password'}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
+                  </Pressable>
+                </View>
               </View>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Confirm your password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Re-enter password"
-                  placeholderTextColor="#999"
-                  secureTextEntry
-                />
+                <View style={styles.passwordInput}>
+                  <TextInput
+                    style={styles.passwordField}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Re-enter password"
+                    placeholderTextColor="#999"
+                    secureTextEntry={!showConfirmation}
+                  />
+                  <Pressable
+                    accessibilityLabel={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'}
+                    onPress={() => setShowConfirmation(!showConfirmation)}
+                  >
+                    <MaterialIcons name={showConfirmation ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
+                  </Pressable>
+                </View>
               </View>
 
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -131,13 +150,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4A4A4A',
   },
-  input: {
+  passwordInput: {
     height: 48,
     paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#D9D9D9',
     backgroundColor: '#F7F7F7',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordField: {
+    flex: 1,
+    height: '100%',
   },
   primaryButton: {
     marginTop: 12,

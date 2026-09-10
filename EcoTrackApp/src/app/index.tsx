@@ -1,6 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
@@ -10,6 +11,7 @@ export default function LoginScreen() {
   const { loginHousehold } = useAuth();
   const [houseId, setHouseId] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -54,17 +56,25 @@ export default function LoginScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              value={password}
-              onChangeText={(val) => {
-                setPassword(val);
-                if (error) setError('');
-              }}
-              secureTextEntry
-              placeholder="Enter password"
-              placeholderTextColor="#999"
-              style={styles.input}
-            />
+            <View style={styles.passwordInput}>
+              <TextInput
+                value={password}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  if (error) setError('');
+                }}
+                secureTextEntry={!showPassword}
+                placeholder="Enter password"
+                placeholderTextColor="#999"
+                style={styles.passwordField}
+              />
+              <Pressable
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
+              </Pressable>
+            </View>
           </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -144,6 +154,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E0E4E8',
+  },
+  passwordInput: {
+    height: 48,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E4E8',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordField: {
+    flex: 1,
+    height: '100%',
   },
   helperText: {
     fontSize: 12,

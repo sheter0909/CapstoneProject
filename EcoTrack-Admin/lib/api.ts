@@ -83,4 +83,8 @@ export const adminApi = {
   dashboardStats: () => apiRequest<unknown>('/dashboard/stats'),
   recentActivity: () => apiRequest<unknown>('/dashboard/recent-activity'),
   householdCollections: (id: string) => apiRequest<unknown[]>(`/households/${encodeURIComponent(id)}/collections`),
+  reportSummary: () => apiRequest<{ totalHouseholds: number; activeCollectors: number; wasteCollected: number; recycledRate: number }>('/reports/summary'),
+  reportWeeklyCollection: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/weekly-collection'),
+  reportWasteTypeDistribution: () => apiRequest<{ _id: string; weightKg: number }[]>('/reports/waste-type-distribution'),
+  reportMonthlyPerformance: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/monthly-performance'),
 };
