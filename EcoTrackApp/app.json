@@ -32,6 +32,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow EcoTrack to access your camera to scan household QR codes."
+        }
       ]
     ],
     "experiments": {
