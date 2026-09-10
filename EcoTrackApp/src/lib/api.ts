@@ -45,34 +45,59 @@ export type NotificationItem = {
   createdAt: string;
 };
 
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  let response: Response;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      signal: options.signal ?? controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
-    });
-  } catch {
-    throw new Error(`Unable to connect to backend server at ${API_URL}. Please make sure the backend is running.`);
-  } finally {
-    clearTimeout(timeout);
+  const method = options.method ?? 'GET';
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    let response: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        signal: options.signal ?? controller.signal,
+        headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
+      });
+    } catch {
+      lastError = new Error(`Unable to connect to backend server at ${API_URL}. Please make sure the backend is running.`);
+      if (attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw lastError;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    let payload: ApiResponse<T> | null = null;
+    try {
+      payload = (await response.json()) as ApiResponse<T>;
+    } catch {
+      payload = null;
+    }
+
+    if (response.ok && payload?.success) return payload.data;
+
+    // The backend answered with an explicit error — final, do not retry.
+    if (payload?.message) throw new Error(payload.message);
+
+    // No usable message (e.g. a proxy/idle-server HTML page): transient, retry.
+    lastError = new Error(`API request failed (${response.status} ${method} ${path})`);
+    if (attempt < RETRY_DELAYS_MS.length) {
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    throw lastError;
   }
 
-  let payload: ApiResponse<T> | null = null;
-  try {
-    payload = (await response.json()) as ApiResponse<T>;
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message ?? `API request failed (${response.status})`);
-  }
-
-  return payload.data;
+  throw lastError ?? new Error('API request failed.');
 }
 
 let token: string | null = null;
