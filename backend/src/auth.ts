@@ -42,7 +42,8 @@ export async function issueToken(id: string, role: Role, name?: string) {
 
 export async function login(role: Role, identifier: string, rawPassword: string) {
   const Model = models[role];
-  const field = role === 'admin' ? { email: identifier.toLowerCase() } : role === 'household' ? { householdId: identifier } : { collectorId: identifier.toUpperCase() };
+  const trimmed = identifier.trim();
+  const field = role === 'admin' ? { email: trimmed.toLowerCase() } : role === 'household' ? { householdId: trimmed } : { collectorId: trimmed.toUpperCase() };
   const account = await Model.findFirst({ where: field }) as Account | null;
   if (!account || !(await bcrypt.compare(rawPassword, account.password))) return { error: 'Invalid credentials.' } as const;
   if (account.status === 'archived') return { error: 'This account has been archived.' } as const;

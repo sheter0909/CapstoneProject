@@ -18,7 +18,7 @@ type AuthContextValue = {
   collectorUser: CollectorUser | null;
   collectorRecoveryVerified: boolean;
   collectorResetAccountId: string | null;
-  loginCollector: (collectorId: string, password: string) => Promise<boolean>;
+  loginCollector: (collectorId: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyCollectorIdentity: (collectorId: string, birthdate: string) => Promise<boolean>;
   resetCollectorPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   logoutCollector: () => void;
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginCollector = async (collectorId: string, password: string) => {
     try {
-      const result = await collectorApi.login(collectorId, password);
+      const result = await collectorApi.login(collectorId.trim(), password);
       setApiToken(result.token);
       setCollectorUser(result.account);
       await Promise.all([
@@ -161,9 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AsyncStorage.setItem(COLLECTOR_KEY, JSON.stringify(result.account)),
       ]);
       setCollectorAuthenticated(true);
-      return true;
-    } catch {
-      return false;
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Invalid Collector ID or Password.' };
     }
   };
 

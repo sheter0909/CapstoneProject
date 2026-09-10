@@ -21,10 +21,10 @@ export default function GarbageCollectorLoginScreen() {
       return;
     }
 
-    const success = await loginCollector(collectorId, password);
+    const result = await loginCollector(collectorId, password);
 
-    if (!success) {
-      setError('Invalid Collector ID or Password.');
+    if (!result.success) {
+      setError(result.error ?? 'Invalid Collector ID or Password.');
       return;
     }
 
