@@ -54,11 +54,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
 
         if (storedToken) setApiToken(storedToken);
-        if (storedHousehold) {
+        if (storedHousehold && storedCollector) {
+          // Legacy poisoned state (both portals stored under one shared token):
+          // the token can only belong to one role, so force a fresh login.
+          setApiToken(null);
+          await Promise.all([
+            AsyncStorage.removeItem(TOKEN_KEY),
+            AsyncStorage.removeItem(HOUSEHOLD_KEY),
+            AsyncStorage.removeItem(COLLECTOR_KEY),
+          ]);
+        } else if (storedHousehold) {
           setHouseholdUser(JSON.parse(storedHousehold) as HouseholdUser);
           setHouseholdAuthenticated(true);
-        }
-        if (storedCollector) {
+        } else if (storedCollector) {
           setCollectorUser(JSON.parse(storedCollector) as CollectorUser);
           setCollectorAuthenticated(true);
         }
@@ -80,9 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await householdApi.login(householdId.trim(), password);
       setApiToken(result.token);
+      // Single active session: a household login invalidates any collector session
+      // sharing this device, so the stored token always matches the active portal.
+      setCollectorAuthenticated(false);
+      setCollectorUser(null);
       await Promise.all([
         AsyncStorage.setItem(TOKEN_KEY, result.token),
         AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(result.account)),
+        AsyncStorage.removeItem(COLLECTOR_KEY),
       ]);
 
       try {
@@ -155,10 +168,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await collectorApi.login(collectorId.trim(), password);
       setApiToken(result.token);
-      setCollectorUser(result.account);
+      // Single active session: a collector login invalidates any household session
+      // sharing this device, so the stored token always matches the active portal.
+      setHouseholdAuthenticated(false);
+      setHouseholdUser(null);
       await Promise.all([
         AsyncStorage.setItem(TOKEN_KEY, result.token),
         AsyncStorage.setItem(COLLECTOR_KEY, JSON.stringify(result.account)),
+        AsyncStorage.removeItem(HOUSEHOLD_KEY),
       ]);
       setCollectorAuthenticated(true);
       return { success: true };
