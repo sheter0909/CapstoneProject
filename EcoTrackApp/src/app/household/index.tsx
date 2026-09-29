@@ -52,7 +52,7 @@ export default function HouseholdHomeScreen() {
     }
     if (hydrated) loadData();
     return () => { isMounted = false; };
-  }, [hydrated]);
+  }, [hydrated, refreshHouseholdProfile]);
 
   const displayName = householdUser?.fullName || 'Household Member';
   const displayInitial = (displayName.trim().charAt(0) || 'H').toUpperCase();

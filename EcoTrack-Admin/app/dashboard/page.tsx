@@ -36,31 +36,34 @@ function greetingForHour(hour: number): string {
   return 'Good evening';
 }
 
+function readStoredSession(): { token: string | null; user: AdminUser | null } {
+  if (typeof window === 'undefined') return { token: null, user: null };
+  let user: AdminUser | null = null;
+  try {
+    const userStr = window.localStorage.getItem('adminUser');
+    user = userStr ? (JSON.parse(userStr) as AdminUser) : null;
+  } catch {
+    user = null;
+  }
+  return { token: window.localStorage.getItem('authToken'), user };
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [recentHouseholds, setRecentHouseholds] = useState<RecentHousehold[]>([]);
 
+  const [session] = useState(readStoredSession);
+  const adminUser = session.user;
+  const isAuthenticated = session.token !== null && session.user !== null;
+
   useEffect(() => {
-    const authToken = window.localStorage.getItem('authToken');
-    const userStr = window.localStorage.getItem('adminUser');
-
-    if (!authToken || !userStr) {
+    if (!isAuthenticated) {
       router.push('/login');
       return;
     }
-
-    try {
-      setAdminUser(JSON.parse(userStr) as AdminUser);
-    } catch {
-      router.push('/login');
-      return;
-    }
-    setAuthChecked(true);
 
     Promise.all([
       adminApi.dashboardStats() as Promise<{ totalHouseholds: number; activeHouseholds: number; inactiveHouseholds: number; archivedHouseholds: number; pendingAlerts: number }>,
@@ -94,9 +97,9 @@ export default function DashboardPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [router]);
+  }, [router, isAuthenticated]);
 
-  if (!authChecked) {
+  if (!isAuthenticated) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#f7fdf8_0%,#eef9ef_100%)]">
         <div className="text-center">

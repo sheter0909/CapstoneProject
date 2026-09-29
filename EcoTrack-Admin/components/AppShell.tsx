@@ -1,42 +1,35 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Sidebar from './Sidebar';
 
 const PUBLIC_PATHS = ['/', '/login'];
 
+function isAuthenticated(): boolean {
+  return typeof window !== 'undefined' && !!window.localStorage.getItem('authToken');
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const authToken = localStorage.getItem('authToken');
-    const isAuthenticated = !!authToken;
-    const isPublicPage = PUBLIC_PATHS.includes(pathname);
-    const shouldShow = isAuthenticated && !isPublicPage;
-    setShowSidebar(shouldShow);
-    if (!shouldShow) {
-      setMobileOpen(false);
-    }
-  }, [pathname]);
+  const showSidebar = isAuthenticated() && !PUBLIC_PATHS.includes(pathname);
+  const [drawerRequested, setDrawerRequested] = useState(false);
+  const mobileOpen = showSidebar && drawerRequested;
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('adminUser');
-    setShowSidebar(false);
-    setMobileOpen(false);
+    setDrawerRequested(false);
   };
 
   return (
     <>
       {showSidebar && (
         <>
-          <Sidebar onLogout={handleLogout} isOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
+          <Sidebar onLogout={handleLogout} isOpen={mobileOpen} onClose={() => setDrawerRequested(false)} />
           <button
             type="button"
-            onClick={() => setMobileOpen(true)}
+            onClick={() => setDrawerRequested(true)}
             className="fixed left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-2xl border border-green-200 bg-white/95 text-green-700 shadow-sm transition hover:bg-green-50 md:hidden"
             aria-label="Open navigation"
           >
@@ -47,7 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {mobileOpen && (
             <button
               type="button"
-              onClick={() => setMobileOpen(false)}
+              onClick={() => setDrawerRequested(false)}
               className="fixed inset-0 z-30 bg-black/20 md:hidden"
               aria-label="Close navigation"
             />

@@ -1,6 +1,6 @@
 import { Link, Slot, useRouter, useSegments } from 'expo-router';
 import { Animated, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Spacing } from '@/constants/theme';
 
@@ -18,7 +18,7 @@ export default function GarbageCollectorLayout() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuAnim = useRef(new Animated.Value(-260)).current;
+  const [menuAnim] = useState(() => new Animated.Value(-260));
   const segments = useSegments();
   const activeSegment = segments[segments.length - 1] ?? 'garbagecollector';
 

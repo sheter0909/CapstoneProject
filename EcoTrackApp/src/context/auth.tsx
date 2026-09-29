@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { collectorApi, householdApi, CollectorUser, HouseholdUser, setApiToken } from '@/lib/api';
 
 type AuthContextValue = {
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshHouseholdProfile = async () => {
+  const refreshHouseholdProfile = useCallback(async () => {
     try {
       const profile = await householdApi.profile();
       if (profile?.fullName && profile.householdId) {
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-  };
+  }, []);
 
   const verifyHouseholdIdentity = async (householdId: string, birthdate: string) => {
     try {
@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const resetHouseholdPassword = async (password: string) => {
+  const resetHouseholdPassword = useCallback(async (password: string) => {
     if (!householdResetToken) return { success: false, error: 'Reset session expired. Please verify again.' };
     try {
       await householdApi.resetPassword(householdResetToken, password);
@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unable to reset password.' };
     }
-  };
+  }, [householdResetToken]);
 
   const logoutHousehold = () => {
     setHouseholdAuthenticated(false);
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const resetCollectorPassword = async (password: string) => {
+  const resetCollectorPassword = useCallback(async (password: string) => {
     if (!collectorResetToken) return { success: false, error: 'Reset session expired. Please verify again.' };
     try {
       await collectorApi.resetPassword(collectorResetToken, password);
@@ -208,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unable to reset password.' };
     }
-  };
+  }, [collectorResetToken]);
 
   const logoutCollector = () => {
     setCollectorAuthenticated(false);
@@ -248,10 +248,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       householdAuthenticated,
       householdRecoveryVerified,
       householdResetAccountId,
+      resetHouseholdPassword,
+      refreshHouseholdProfile,
       collectorAuthenticated,
       collectorUser,
       collectorRecoveryVerified,
       collectorResetAccountId,
+      resetCollectorPassword,
     ]
   );
 

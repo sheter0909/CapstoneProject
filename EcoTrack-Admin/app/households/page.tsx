@@ -19,8 +19,31 @@ interface Household {
   password?: string;
   username?: string;
   lastCollection?: string;
-  history?: any[];
   violations?: number;
+}
+
+interface BackendHouseholdAccount {
+  id: string;
+  fullName: string;
+  householdId: string;
+  address?: string | null;
+  purok: string;
+  birthdate?: string | null;
+  joinDate: string;
+  status: 'active' | 'inactive' | 'archived';
+  violationCount?: number;
+}
+
+interface HouseholdListResult {
+  items?: BackendHouseholdAccount[];
+}
+
+interface CollectionHistoryEntry {
+  id: string;
+  timestamp: string;
+  wasteType: string;
+  weightKg: number | string;
+  editedAt?: string | null;
 }
 
 export default function HouseholdsPage() {
@@ -66,40 +89,43 @@ export default function HouseholdsPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
-  const [collectionHistory, setCollectionHistory] = useState<any[]>([]);
+  const [collectionHistory, setCollectionHistory] = useState<CollectionHistoryEntry[]>([]);
+
+  const [hasStoredSession] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return !!window.localStorage.getItem('authToken') && !!JSON.parse(window.localStorage.getItem('adminUser') ?? 'null');
+    } catch {
+      return false;
+    }
+  });
 
   // Check authentication on mount and load households from the backend
   useEffect(() => {
-    const authToken = localStorage.getItem('authToken');
-    const userStr = localStorage.getItem('adminUser');
-
-    if (!authToken || !userStr) {
+    if (!hasStoredSession) {
       router.push('/login');
-    } else {
-      try {
-        JSON.parse(userStr);
-        void adminApi.households('?limit=100').then((result: any) =>
-          setHouseholds(
-            (result.items ?? []).map((account: any) => ({
-              id: account.id,
-              name: account.fullName,
-              email: account.householdId,
-              unit: account.address,
-              purok: account.purok,
-              birthdate: account.birthdate ?? '',
-              joinDate: account.joinDate,
-              status: account.status,
-              violations: account.violationCount ?? 0,
-            }))
-          )
-        );
-      } catch {
-        router.push('/login');
-      }
+      return;
     }
-    
-    setIsLoading(false);
-  }, [router]);
+
+    void (adminApi.households('?limit=100') as Promise<HouseholdListResult>)
+      .then((result) =>
+        setHouseholds(
+          (result.items ?? []).map((account) => ({
+            id: account.id,
+            name: account.fullName,
+            email: account.householdId,
+            unit: account.address ?? '',
+            purok: account.purok,
+            birthdate: account.birthdate ?? '',
+            joinDate: account.joinDate,
+            status: account.status,
+            violations: account.violationCount ?? 0,
+          }))
+        )
+      )
+      .catch(() => undefined)
+      .finally(() => setIsLoading(false));
+  }, [router, hasStoredSession]);
 
 
 
@@ -188,7 +214,7 @@ export default function HouseholdsPage() {
         address: formData.purok.trim(),
         birthdate: formData.unit.trim() || undefined,
         password: formData.password || undefined,
-      }) as any;
+      }) as BackendHouseholdAccount;
 
       const updatedHousehold: Household = {
         ...selectedHousehold,
@@ -251,9 +277,10 @@ export default function HouseholdsPage() {
         address: pendingNewHousehold.purok,
         birthdate: pendingNewHousehold.unit || undefined,
         password: pendingNewHousehold.password,
-      }) as any;
+      }) as BackendHouseholdAccount;
 
-      const { password: _password, ...householdWithoutPassword } = pendingNewHousehold;
+      const householdWithoutPassword = { ...pendingNewHousehold };
+      delete householdWithoutPassword.password;
       const updatedHousehold = {
         ...householdWithoutPassword,
         id: account.id,
@@ -338,7 +365,7 @@ export default function HouseholdsPage() {
 
   const openHistory = async (household: Household) => {
     setSelectedHousehold(household);
-    try { setCollectionHistory(await adminApi.householdCollections(household.email)); } catch { setCollectionHistory([]); }
+    try { setCollectionHistory(await adminApi.householdCollections(household.email) as CollectionHistoryEntry[]); } catch { setCollectionHistory([]); }
     setShowHistoryModal(true);
   };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
 import { adminApi, ApiError, type CollectorCollectionRecord } from '../../lib/api';
@@ -18,6 +18,21 @@ interface GarbageCollector {
   previousStatus?: 'active' | 'inactive' | 'archived';
   password?: string;
   birthdate?: string;
+}
+
+interface BackendCollectorAccount {
+  id: string;
+  collectorId: string;
+  fullName: string;
+  contactNumber?: string | null;
+  assignedArea: string;
+  birthdate?: string | null;
+  joinDate: string;
+  status: 'active' | 'inactive' | 'archived';
+}
+
+interface CollectorListResult {
+  items?: BackendCollectorAccount[];
 }
 
 export default function GarbageCollectorsPage() {
@@ -61,7 +76,7 @@ export default function GarbageCollectorsPage() {
     return (nameMatch || idMatch || zoneMatch) && matchesStatus;
   });
 
-  const getUniqueCollectorId = () => {
+  const getUniqueCollectorId = useCallback(() => {
     const existingNumbers = collectors
       .map((collector) => {
         const match = collector.id.match(/^GC-(\d+)$/i);
@@ -71,39 +86,42 @@ export default function GarbageCollectorsPage() {
 
     const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
     return `GC-${String(nextNumber).padStart(4, '0')}`;
-  };
+  }, [collectors]);
+
+  const [hasStoredSession] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return !!window.localStorage.getItem('authToken') && !!JSON.parse(window.localStorage.getItem('adminUser') ?? 'null');
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
-    const authToken = localStorage.getItem('authToken');
-    const userStr = localStorage.getItem('adminUser');
-
-    if (!authToken || !userStr) {
+    if (!hasStoredSession) {
       router.push('/login');
-    } else {
-      try {
-        JSON.parse(userStr);
-        void adminApi.collectors('?limit=100').then((result: any) => {
-          const accounts = (result.items ?? []).map((account: any) => ({
-            id: account.collectorId,
-            dbId: account.id,
-            name: account.fullName,
-            email: '',
-            phone: account.contactNumber ?? '',
-            zone: account.assignedArea,
-            birthdate: account.birthdate ?? '',
-            joinDate: account.joinDate,
-            status: account.status,
-          }));
-          setCollectors(accounts);
-          setSelectedCollector(accounts[0] ?? null);
-        });
-      } catch {
-        router.push('/login');
-      }
+      return;
     }
 
-    setIsLoading(false);
-  }, [router]);
+    void (adminApi.collectors('?limit=100') as Promise<CollectorListResult>)
+      .then((result) => {
+        const accounts = (result.items ?? []).map((account) => ({
+          id: account.collectorId,
+          dbId: account.id,
+          name: account.fullName,
+          email: '',
+          phone: account.contactNumber ?? '',
+          zone: account.assignedArea,
+          birthdate: account.birthdate ?? '',
+          joinDate: account.joinDate,
+          status: account.status,
+        }));
+        setCollectors(accounts);
+        setSelectedCollector(accounts[0] ?? null);
+      })
+      .catch(() => undefined)
+      .finally(() => setIsLoading(false));
+  }, [router, hasStoredSession]);
 
   const openCreateCollectorModal = () => {
     resetFormState();
@@ -115,9 +133,12 @@ export default function GarbageCollectorsPage() {
 
   useEffect(() => {
     if (showForm && !isEditing && !formData.id) {
-      setFormData((prev) => ({ ...prev, id: getUniqueCollectorId() }));
+      const id = getUniqueCollectorId();
+      void Promise.resolve().then(() => {
+        setFormData((prev) => (prev.id ? prev : { ...prev, id }));
+      });
     }
-  }, [showForm, isEditing, formData.id, collectors]);
+  }, [showForm, isEditing, formData.id, getUniqueCollectorId]);
 
   const resetFormState = () => {
     setShowForm(false);
@@ -165,10 +186,10 @@ export default function GarbageCollectorsPage() {
       ...(formData.password ? { password: formData.password } : {}),
     };
 
-    let account: any;
+    let account: BackendCollectorAccount;
     setIsSubmitting(true);
     try {
-      account = await adminApi.createCollector({ collectorId: idValue, fullName: formData.name.trim(), assignedArea: formData.zone.trim(), birthdate: formData.birthdate || undefined, contactNumber: formData.phone.trim() || undefined, password: formData.password });
+      account = await adminApi.createCollector({ collectorId: idValue, fullName: formData.name.trim(), assignedArea: formData.zone.trim(), birthdate: formData.birthdate || undefined, contactNumber: formData.phone.trim() || undefined, password: formData.password }) as BackendCollectorAccount;
     } catch (error) {
       if (error instanceof ApiError && error.errors && error.errors.length > 0) {
         const serverErrors: { id?: string; name?: string; zone?: string; password?: string } = {};
@@ -187,7 +208,8 @@ export default function GarbageCollectorsPage() {
     } finally {
       setIsSubmitting(false);
     }
-    const { password: _password, ...collectorWithoutPassword } = newCollector;
+    const collectorWithoutPassword = { ...newCollector };
+    delete collectorWithoutPassword.password;
     const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, joinDate: account.joinDate, status: account.status };
     const updatedCollectors = [...collectors.filter((collector) => collector.id !== idValue), savedCollector];
     setCollectors(updatedCollectors);
@@ -265,14 +287,14 @@ export default function GarbageCollectorsPage() {
 
     const collectorDbId = selectedCollector.dbId || selectedCollector.id;
     try {
-      const account: any = await adminApi.updateCollector(collectorDbId, {
+      const account = await adminApi.updateCollector(collectorDbId, {
         collectorId: formData.id.trim(),
         fullName: formData.name.trim(),
         assignedArea: formData.zone.trim(),
         contactNumber: formData.phone.trim() || undefined,
         birthdate: formData.birthdate || undefined,
         password: formData.password || undefined,
-      });
+      }) as BackendCollectorAccount;
 
       const updatedCollector: GarbageCollector = {
         ...selectedCollector,

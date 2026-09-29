@@ -34,6 +34,13 @@ function concernLabel(note: AdminNotification): string {
   return note.level || 'Report';
 }
 
+async function fetchNotificationFeed(roleFilter: string, search: string, showConcernsOnly: boolean): Promise<AdminNotification[]> {
+  const roleParam = roleFilter !== 'all' && !showConcernsOnly ? `&role=${encodeURIComponent(roleFilter)}` : '';
+  const params = `?limit=100${roleParam}${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`;
+  const result = await adminApi.notifications(params);
+  return result.items ?? [];
+}
+
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (isNaN(date.getTime())) return iso;
@@ -68,10 +75,7 @@ export default function NotificationsPage() {
     setIsLoading(true);
     setLoadError('');
     try {
-      const roleParam = roleFilter !== 'all' && !showConcernsOnly ? `&role=${encodeURIComponent(roleFilter)}` : '';
-      const params = `?limit=100${roleParam}${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`;
-      const result = await adminApi.notifications(params);
-      setNotifications(result.items ?? []);
+      setNotifications(await fetchNotificationFeed(roleFilter, search, showConcernsOnly));
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Unable to load notifications.');
     } finally {
@@ -86,7 +90,10 @@ export default function NotificationsPage() {
       router.push('/login');
       return;
     }
-    void fetchNotifications();
+    void fetchNotificationFeed('all', '', false)
+      .then(setNotifications)
+      .catch(() => setLoadError('Unable to load notifications.'))
+      .finally(() => setIsLoading(false));
     void adminApi.households('?limit=200').then((result: unknown) => {
       const items = (result as { items?: { householdId: string; fullName: string }[] }).items ?? [];
       setHouseholdOptions(items.map((account) => ({ id: account.householdId, label: `${account.householdId} — ${account.fullName}` })));
@@ -95,7 +102,6 @@ export default function NotificationsPage() {
       const items = (result as { items?: { collectorId: string; fullName: string }[] }).items ?? [];
       setCollectorOptions(items.map((account) => ({ id: account.collectorId, label: `${account.collectorId} — ${account.fullName}` })));
     }).catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const threads = useMemo(() => {

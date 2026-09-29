@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -87,15 +87,17 @@ export default function DatePickerField({
   const [modalVisible, setModalVisible] = useState(false);
   const [textValue, setTextValue] = useState(formatToDisplayDate(value));
   const [inlineError, setInlineError] = useState('');
+  const [lastSyncedValue, setLastSyncedValue] = useState(value);
 
-  // Sync text value if external value prop changes
-  useEffect(() => {
+  // Sync text value if external value prop changes (render-phase update).
+  if (value !== lastSyncedValue) {
+    setLastSyncedValue(value);
     const formatted = formatToDisplayDate(value);
     setTextValue(formatted);
     if (formatted) {
       setInlineError('');
     }
-  }, [value]);
+  }
 
   // Parse initial state or default to current date
   const initialDate = value ? new Date(parseToIsoDate(value)) : new Date(2000, 0, 1);
