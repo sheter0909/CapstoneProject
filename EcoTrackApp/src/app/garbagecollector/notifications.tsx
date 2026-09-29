@@ -19,22 +19,6 @@ export default function CollectorNotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadNotifications = () => {
-    setLoading(true);
-    setError('');
-    collectorApi
-      .notifications()
-      .then((items) => {
-        setNotifications(Array.isArray(items) ? items : []);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Unable to load notifications.');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
-
   useEffect(() => {
     let isMounted = true;
     collectorApi

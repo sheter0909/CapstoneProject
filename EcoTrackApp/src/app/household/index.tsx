@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Colors, Spacing } from '@/constants/theme';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { CollectionHistoryItem, householdApi, NotificationItem } from '@/lib/api';
 
@@ -25,7 +25,6 @@ export default function HouseholdHomeScreen() {
   const { householdUser, hydrated, refreshHouseholdProfile } = useAuth();
   const [latestHistory, setLatestHistory] = useState<CollectionHistoryItem | null>(null);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
-  const [loading, setLoading] = useState(true);
   const [compliantMessage] = useState(
     () => COMPLIANT_MESSAGES[Math.floor(Math.random() * COMPLIANT_MESSAGES.length)],
   );
@@ -49,8 +48,6 @@ export default function HouseholdHomeScreen() {
         }
       } catch {
         // ignore
-      } finally {
-        if (isMounted) setLoading(false);
       }
     }
     if (hydrated) loadData();

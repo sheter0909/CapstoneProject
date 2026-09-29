@@ -12,7 +12,6 @@ export default function ForgotCollectorPasswordScreen() {
   const [collectorId, setCollectorId] = useState('');
   const [birthdate, setBirthdate] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const handleContinue = async () => {
     setError('');
@@ -22,9 +21,7 @@ export default function ForgotCollectorPasswordScreen() {
       return;
     }
 
-    setLoading(true);
     const verified = await verifyCollectorIdentity(collectorId.trim(), birthdate.trim());
-    setLoading(false);
 
     if (!verified) {
       setError('Collector ID and birthdate do not match our records.');

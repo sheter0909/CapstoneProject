@@ -52,12 +52,6 @@ export default function HouseholdsPage() {
   const [showRegisterSuccess, setShowRegisterSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
-  const stripPassword = <T extends { password?: unknown }>(item: T): Omit<T, 'password'> => {
-    const { password: _password, ...rest } = item;
-    void _password;
-    return rest;
-  };
-
   const visibleHouseholds = households.filter((household) => household.status !== 'archived');
 
   const filteredHouseholds = visibleHouseholds.filter((household) => {
@@ -68,10 +62,8 @@ export default function HouseholdsPage() {
   });
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [collectionHistory, setCollectionHistory] = useState<any[]>([]);
@@ -303,31 +295,6 @@ export default function HouseholdsPage() {
     }
   };
 
-  const doUpdateHousehold = (updated: Household) => {
-    const list = households.map(h => (h.id === updated.id ? updated : h));
-    setHouseholds(list);
-    localStorage.setItem('households', JSON.stringify(list.map(stripPassword)));
-    setFormData({ name: '', email: '', unit: '', password: '', purok: '' });
-    setShowForm(false);
-    setIsEditing(false);
-    setSelectedHousehold(updated);
-    setShowUpdateSuccess(true);
-    setTimeout(() => setShowUpdateSuccess(false), 2000);
-  };
-
-  const handleDeleteHousehold = (id: string) => {
-    const updatedHouseholds = households.filter(h => h.id !== id);
-    setHouseholds(updatedHouseholds);
-    localStorage.setItem('households', JSON.stringify(updatedHouseholds.map(stripPassword)));
-    setSelectedHousehold(null);
-  };
-
-  const handleConfirmDelete = () => {
-    if (!selectedHousehold) return;
-    handleDeleteHousehold(selectedHousehold.id);
-    setShowDeleteConfirm(false);
-  };
-
   const handleArchiveHousehold = async () => {
     if (!selectedHousehold) return;
 
@@ -342,7 +309,6 @@ export default function HouseholdsPage() {
       setHouseholds(updated);
       setSelectedHousehold({ ...selectedHousehold, status: account.status });
       setShowArchiveConfirm(false);
-      setShowDeleteConfirm(false);
       setShowUpdateSuccess(true);
       setToastMessage(isRestoring ? 'Household restored successfully' : 'Household archived successfully');
       setTimeout(() => {
@@ -368,11 +334,6 @@ export default function HouseholdsPage() {
     setShowPassword(false);
     setIsEditing(true);
     setShowForm(true);
-  };
-
-  const openQR = (household: Household) => {
-    setSelectedHousehold(household);
-    setShowQRModal(true);
   };
 
   const openHistory = async (household: Household) => {
@@ -869,23 +830,6 @@ export default function HouseholdsPage() {
       </Modal>
 
       <Modal
-        open={showQRModal}
-        title="Print Household QR Code"
-        message="Print the QR Code and provide it to the household. The QR Code will be used during every waste collection for quick identification."
-        actions={[
-          { label: 'Print', onClick: () => { printQRCode(`qr-success-${selectedHousehold?.id}`); setShowQRModal(false);} , variant: 'primary'},
-          { label: 'Download', onClick: () => { downloadQRCode(`qr-success-${selectedHousehold?.id}`); setShowQRModal(false);} , variant: 'default'},
-          { label: 'Close', onClick: () => setShowQRModal(false) }
-        ]}
-      >
-        <div className="mt-4 flex justify-center">
-          {selectedHousehold && (
-            <QRCodeSVG id={`qr-success-${selectedHousehold.id}`} value={`household-${selectedHousehold.id}-${selectedHousehold.unit}`} size={200} />
-          )}
-        </div>
-      </Modal>
-
-      <Modal
         open={showHistoryModal}
         title="Household Collection History"
         message="Recent collection records for this household"
@@ -908,17 +852,6 @@ export default function HouseholdsPage() {
         title="Incomplete Information"
         message="Please complete all required fields before registering the household."
         actions={[{ label: 'OK', onClick: () => setShowMissing(false) }]}
-      />
-
-      <Modal
-        open={showDeleteConfirm}
-        title="Delete Household?"
-        message="This will permanently remove the household record from EcoTrack. This action cannot be undone."
-        actions={[
-          { label: 'Cancel', onClick: () => setShowDeleteConfirm(false) },
-          { label: 'Archive', onClick: () => { setShowArchiveConfirm(true); setShowDeleteConfirm(false); } },
-          
-        ]}
       />
 
       <Modal

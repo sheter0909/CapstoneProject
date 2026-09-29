@@ -50,12 +50,6 @@ export default function GarbageCollectorsPage() {
   const [formErrors, setFormErrors] = useState<{ id?: string; name?: string; zone?: string; birthdate?: string; password?: string }>({});
   const [originalCollectorId, setOriginalCollectorId] = useState<string | null>(null);
 
-  const stripPassword = <T extends { password?: unknown }>(item: T): Omit<T, 'password'> => {
-    const { password: _password, ...rest } = item;
-    void _password;
-    return rest;
-  };
-
   const visibleCollectors = collectors.filter((collector) => collector.status !== 'archived');
 
   const filteredCollectors = visibleCollectors.filter((collector) => {
