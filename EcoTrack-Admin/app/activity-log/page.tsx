@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { adminApi } from '../../lib/api';
 
 interface Activity {
   id: string;
@@ -12,85 +13,48 @@ interface Activity {
   status: 'success' | 'pending' | 'failed';
 }
 
-interface AdminUser {
-  email: string;
-  name: string;
-}
-
-const defaultActivities: Activity[] = [
-  {
-    id: '1',
-    user: 'John Doe',
-    type: 'Login',
-    description: 'User logged in from Web',
-    timestamp: new Date(Date.now() - 2 * 60000).toISOString(),
-    status: 'success',
-  },
-  {
-    id: '2',
-    user: 'Jane Smith',
-    type: 'Waste Logged',
-    description: 'Reported 5kg of recyclable waste',
-    timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
-    status: 'success',
-  },
-  {
-    id: '3',
-    user: 'Collector - Zone A',
-    type: 'Collection',
-    description: 'Collected waste from Apt 101-110',
-    timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
-    status: 'success',
-  },
-  {
-    id: '4',
-    user: 'Bob Johnson',
-    type: 'Waste Logged',
-    description: 'Reported 3kg of organic waste',
-    timestamp: new Date(Date.now() - 90 * 60000).toISOString(),
-    status: 'success',
-  },
-  {
-    id: '5',
-    user: 'Admin User',
-    type: 'Account Created',
-    description: 'New household account created',
-    timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
-    status: 'success',
-  },
-];
-
 export default function ActivityLogPage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activities, setActivities] = useState<Activity[]>(defaultActivities);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [filter, setFilter] = useState<'all' | 'success' | 'failed' | 'pending'>('all');
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
     const userStr = localStorage.getItem('adminUser');
-    const savedActivities = localStorage.getItem('activities');
 
     if (!authToken || !userStr) {
       router.push('/login');
-    } else {
-      try {
-        const user = JSON.parse(userStr);
-        setAdminUser(user);
-        if (savedActivities) {
-          setActivities(JSON.parse(savedActivities));
-        }
-      } catch {
-        router.push('/login');
-      }
+      return;
     }
 
-    setIsLoading(false);
-  }, [router]);
+    try {
+      JSON.parse(userStr);
+    } catch {
+      router.push('/login');
+      return;
+    }
 
-  const filteredActivities =
-    filter === 'all' ? activities : activities.filter((a) => a.status === filter);
+    const query = `?limit=100${filter !== 'all' ? `&status=${encodeURIComponent(filter)}` : ''}`;
+    void adminApi
+      .activityLogs(query)
+      .then((result) =>
+        setActivities(
+          (result.items ?? []).map((entry) => ({
+            id: entry.id,
+            user: entry.user,
+            type: entry.activityType,
+            description: entry.description,
+            timestamp: entry.timestamp,
+            status: entry.status,
+          }))
+        )
+      )
+      .catch(() => setActivities([]))
+      .finally(() => setIsLoading(false));
+  }, [router, filter]);
+
+  const filteredActivities = activities;
 
   const getStatusColor = (status: string) => {
     switch (status) {

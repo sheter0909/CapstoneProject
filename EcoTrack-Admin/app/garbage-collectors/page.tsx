@@ -3,7 +3,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
-import { addActivity } from '../../lib/activity';
 import { adminApi, ApiError, type CollectorCollectionRecord } from '../../lib/api';
 import { useApiConnecting } from '../../lib/useApiConnecting';
 
@@ -21,14 +20,8 @@ interface GarbageCollector {
   birthdate?: string;
 }
 
-interface AdminUser {
-  email: string;
-  name: string;
-}
-
 export default function GarbageCollectorsPage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [collectors, setCollectors] = useState<GarbageCollector[]>([]);
   const [selectedCollector, setSelectedCollector] = useState<GarbageCollector | null>(null);
@@ -94,8 +87,7 @@ export default function GarbageCollectorsPage() {
       router.push('/login');
     } else {
       try {
-        const user = JSON.parse(userStr);
-        setAdminUser(user);
+        JSON.parse(userStr);
         void adminApi.collectors('?limit=100').then((result: any) => {
           const accounts = (result.items ?? []).map((account: any) => ({
             id: account.collectorId,
@@ -329,31 +321,32 @@ export default function GarbageCollectorsPage() {
     }
   };
 
-  const handleArchiveCollector = () => {
+  const handleArchiveCollector = async () => {
     if (!selectedCollector) return;
 
     const isRestoring = selectedCollector.status === 'archived';
-    const nextStatus: GarbageCollector['status'] = isRestoring ? (selectedCollector.previousStatus ?? 'active') : 'archived';
-    const nextPreviousStatus: 'active' | 'inactive' | 'archived' | undefined = isRestoring ? (selectedCollector.previousStatus ?? 'active') : selectedCollector.status;
+    try {
+      const account = await (isRestoring
+        ? adminApi.unarchiveCollector(selectedCollector.dbId || selectedCollector.id)
+        : adminApi.archiveCollector(selectedCollector.dbId || selectedCollector.id)) as { status: GarbageCollector['status'] };
+      const updatedCollectors = collectors.map((collector) =>
+        collector.id === selectedCollector.id ? { ...collector, status: account.status } : collector
+      );
+      const updatedSelectedCollector = updatedCollectors.find((collector) => collector.id === selectedCollector.id);
 
-    const updatedCollectors = collectors.map((collector) =>
-      collector.id === selectedCollector.id ? { ...collector, status: nextStatus, previousStatus: nextPreviousStatus } : collector
-    );
-
-    const updatedSelectedCollector = updatedCollectors.find((collector) => collector.id === selectedCollector.id);
-
-    setCollectors(updatedCollectors);
-    localStorage.setItem('garbageCollectors', JSON.stringify(updatedCollectors.map(stripPassword)));
-    setSelectedCollector(updatedSelectedCollector ?? { ...selectedCollector, status: nextStatus, previousStatus: nextPreviousStatus });
-    setShowArchiveConfirm(false);
-    setShowUpdateSuccess(true);
-    const message = isRestoring ? 'Garbage Collector restored successfully' : 'Garbage Collector archived successfully';
-    setToastMessage(message);
-    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} garbage collector ${selectedCollector.name}`, adminUser?.name || 'Admin User', 'Account Update');
-    setTimeout(() => {
-      setToastMessage(null);
-      setShowUpdateSuccess(false);
-    }, 2200);
+      setCollectors(updatedCollectors);
+      setSelectedCollector(updatedSelectedCollector ?? { ...selectedCollector, status: account.status });
+      setShowArchiveConfirm(false);
+      setShowUpdateSuccess(true);
+      setToastMessage(isRestoring ? 'Garbage Collector restored successfully' : 'Garbage Collector archived successfully');
+      setTimeout(() => {
+        setToastMessage(null);
+        setShowUpdateSuccess(false);
+      }, 2200);
+    } catch (error) {
+      setShowArchiveConfirm(false);
+      setToastMessage(error instanceof Error ? error.message : 'Unable to update collector status.');
+    }
   };
 
   if (isLoading) {

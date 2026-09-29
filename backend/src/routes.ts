@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
@@ -25,7 +26,8 @@ async function violationCounts(householdIds: string[]): Promise<Record<string, n
   const grouped = await prisma.notification.groupBy({ by: ['householdId'], where: { householdId: { in: householdIds }, level: { contains: 'warning', mode: 'insensitive' } }, _count: { householdId: true } });
   return Object.fromEntries(grouped.map((row) => [row.householdId, row._count.householdId]));
 }
-function cryptoToken() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+function purgeExpiredResetTokens() { const now = Date.now(); for (const [token, reset] of resetTokens) { if (reset.expires < now) resetTokens.delete(token); } }
+function newResetToken() { purgeExpiredResetTokens(); return crypto.randomBytes(32).toString('hex'); }
 
 export function normalizeDateString(d: string | null | undefined): string | null {
   if (!d) return null;
@@ -77,7 +79,7 @@ for (const role of ['household', 'collector'] as const) {
       }
 
       const accountId = role === 'household' ? account.householdId : account.collectorId;
-      const token = cryptoToken();
+      const token = newResetToken();
       resetTokens.set(token, { role, accountId, expires: Date.now() + 15 * 60 * 1000 });
       return ok(res, { resetToken: token, accountId }, 'Identity verified.');
     } catch (error) {
@@ -331,7 +333,7 @@ router.get('/collectors/:id/collections', requireAuth('admin'), async (req, res,
     next(error);
   }
 });
-router.post('/collections', requireAuth('collector'), collectionFields, validateRequest, async (req, res, next) => { try { const householdId = String(req.body.householdId ?? '').trim(); if (!householdId) return fail(res, 400, 'Household ID is required.'); const household = await prisma.household.findUnique({ where: { householdId } }); if (!household) return fail(res, 404, 'Household not found. Check the Household ID or QR code and try again.'); const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); const existing = await prisma.collectionEntry.findFirst({ where: { householdId, timestamp: { gte: sevenDaysAgo } } }); if (existing) return fail(res, 409, 'This household was already collected this week.'); const entry = await prisma.collectionEntry.create({ data: { householdId, collectorId: req.user!.id, segregationStatus: req.body.segregationStatus, wasteType: req.body.wasteType, weightKg: req.body.weightKg } }); await prisma.household.update({ where: { householdId }, data: { lastCollection: entry.timestamp } }); return created(res, entry); } catch (error) { next(error); } });
+router.post('/collections', requireAuth('collector'), collectionFields, validateRequest, async (req, res, next) => { try { const householdId = String(req.body.householdId ?? '').trim(); if (!householdId) return fail(res, 400, 'Household ID is required.'); const household = await prisma.household.findUnique({ where: { householdId } }); if (!household) return fail(res, 404, 'Household not found. Check the Household ID or QR code and try again.'); const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); const existing = await prisma.collectionEntry.findFirst({ where: { householdId, timestamp: { gte: sevenDaysAgo } } }); if (existing) return fail(res, 409, 'This household was already collected this week.'); const entry = await prisma.$transaction(async (tx) => { const created = await tx.collectionEntry.create({ data: { householdId, collectorId: req.user!.id, segregationStatus: req.body.segregationStatus, wasteType: req.body.wasteType, weightKg: req.body.weightKg } }); await tx.household.update({ where: { householdId }, data: { lastCollection: created.timestamp } }); return created; }); return created(res, entry); } catch (error) { next(error); } });
 router.put('/collections/:id', requireAuth('collector'), [idParam, ...collectionFields], validateRequest, async (req, res, next) => { try { const entry = await prisma.collectionEntry.findUnique({ where: { id: String(req.params.id) } }); if (!entry || entry.collectorId !== req.user!.id) return fail(res, 404, 'Collection entry not found.'); if (Date.now() - entry.timestamp.getTime() > 2 * 60 * 60 * 1000) return fail(res, 403, 'Edit window has expired for this entry.'); const updated = await prisma.collectionEntry.update({ where: { id: entry.id }, data: { segregationStatus: req.body.segregationStatus, wasteType: req.body.wasteType, weightKg: req.body.weightKg, editedAt: new Date() } }); return ok(res, updated, 'Collection entry updated.'); } catch (error) { next(error); } });
 router.get('/collectors/me/activity-logs', requireAuth('collector'), pagination, validateRequest, async (req, res, next) => { try { const { page, limit } = paged(req); const where = { collectorId: req.user!.id }; const [items, total] = await Promise.all([prisma.collectionEntry.findMany({ where, orderBy: { timestamp: 'desc' }, skip: (page - 1) * limit, take: limit }), prisma.collectionEntry.count({ where })]); return ok(res, { items, total, page, totalPages: Math.ceil(total / limit) }); } catch (error) { next(error); } });
 router.get('/collectors/me/reports', requireAuth('collector'), async (req, res, next) => { try { const entries = await prisma.collectionEntry.findMany({ where: { collectorId: req.user!.id }, select: { wasteType: true, weightKg: true } }); const totals = new Map<string, { totalKg: number; entries: number }>(); for (const entry of entries) { const current = totals.get(entry.wasteType) ?? { totalKg: 0, entries: 0 }; totals.set(entry.wasteType, { totalKg: current.totalKg + Number(entry.weightKg), entries: current.entries + 1 }); } return ok(res, [...totals].map(([_id, data]) => ({ _id, ...data }))); } catch (error) { next(error); } });
@@ -435,6 +437,6 @@ router.patch('/notifications/:id/read', requireAuth('admin', 'collector', 'house
   }
 });
 
-async function changeStatus(req: Request, res: Response, next: (error: unknown) => void, delegate: any, status: string, activityType: string) { try { const account = await delegate.update({ where: { id: req.params.id }, data: { status } }); await logActivity(req.user!.name ?? 'Admin', activityType, `${activityType}: ${account.fullName}`); return ok(res, publicAccount(account)); } catch (error) { next(error); } }
+async function changeStatus(req: Request, res: Response, next: (error: unknown) => void, delegate: any, status: string, activityType: string) { try { const existing = await delegate.findUnique({ where: { id: req.params.id } }); if (!existing) return fail(res, 404, 'Record not found.'); const account = await delegate.update({ where: { id: req.params.id }, data: { status } }); await logActivity(req.user!.name ?? 'Admin', activityType, `${activityType}: ${account.fullName}`); return ok(res, publicAccount(account)); } catch (error) { next(error); } }
 async function nextCollectorId() { const collectors = await prisma.garbageCollector.findMany({ select: { collectorId: true } }); const latest = collectors.map(({ collectorId }) => Number(collectorId.match(/^GC-(\d+)$/)?.[1] ?? 0)).sort((a, b) => b - a)[0] ?? 0; return `GC-${String(latest + 1).padStart(4, '0')}`; }
 function reportByPeriod(period: 'day' | 'month') { return async (_req: Request, res: Response, next: (error: unknown) => void) => { try { const entries = await prisma.collectionEntry.findMany({ select: { timestamp: true, weightKg: true } }); const totals = new Map<string, number>(); for (const entry of entries) { const date = entry.timestamp.toISOString(); const key = period === 'day' ? date.slice(0, 10) : date.slice(0, 7); totals.set(key, (totals.get(key) ?? 0) + Number(entry.weightKg)); } return ok(res, [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([_id, totalKg]) => ({ _id, totalKg }))); } catch (error) { next(error); } }; }

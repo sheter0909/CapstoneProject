@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/Pagination';
-import { addActivity } from '@/lib/activity';
+import { adminApi } from '@/lib/api';
 
 interface Household {
   id: string;
+  dbId: string;
   name: string;
   email: string;
   unit: string;
@@ -17,6 +18,7 @@ interface Household {
 
 interface GarbageCollector {
   id: string;
+  dbId: string;
   name: string;
   email: string;
   phone: string;
@@ -26,9 +28,23 @@ interface GarbageCollector {
   previousStatus?: 'active' | 'inactive' | 'archived';
 }
 
-interface AdminUser {
-  email: string;
-  name: string;
+interface ArchivedHouseholdRow {
+  id: string;
+  householdId: string;
+  fullName: string;
+  address?: string | null;
+  joinDate: string;
+  status: 'active' | 'inactive' | 'archived';
+}
+
+interface ArchivedCollectorRow {
+  id: string;
+  collectorId: string;
+  fullName: string;
+  contactNumber?: string | null;
+  assignedArea: string;
+  joinDate: string;
+  status: 'active' | 'inactive' | 'archived';
 }
 
 const TABS = ['households', 'collectors'] as const;
@@ -42,7 +58,6 @@ const statusClass = {
 
 export default function ArchivePage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [collectors, setCollectors] = useState<GarbageCollector[]>([]);
@@ -55,8 +70,6 @@ export default function ArchivePage() {
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
     const userStr = localStorage.getItem('adminUser');
-    const savedHouseholds = localStorage.getItem('households');
-    const savedCollectors = localStorage.getItem('garbageCollectors');
 
     if (!authToken || !userStr) {
       router.push('/login');
@@ -64,29 +77,48 @@ export default function ArchivePage() {
     }
 
     try {
-      setAdminUser(JSON.parse(userStr));
+      JSON.parse(userStr);
     } catch {
       router.push('/login');
       return;
     }
 
-    if (savedHouseholds) {
+    void (async () => {
       try {
-        setHouseholds(JSON.parse(savedHouseholds) as Household[]);
+        const [householdResult, collectorResult] = await Promise.all([
+          adminApi.archivedHouseholds('?limit=100'),
+          adminApi.archivedCollectors('?limit=100'),
+        ]);
+        setHouseholds(
+          ((householdResult.items ?? []) as ArchivedHouseholdRow[]).map((account) => ({
+            id: account.householdId,
+            dbId: account.id,
+            name: account.fullName,
+            email: account.householdId,
+            unit: account.address ?? '',
+            joinDate: account.joinDate,
+            status: account.status,
+          }))
+        );
+        setCollectors(
+          ((collectorResult.items ?? []) as ArchivedCollectorRow[]).map((account) => ({
+            id: account.collectorId,
+            dbId: account.id,
+            name: account.fullName,
+            email: '',
+            phone: account.contactNumber ?? '',
+            zone: account.assignedArea,
+            joinDate: account.joinDate,
+            status: account.status,
+          }))
+        );
       } catch {
         setHouseholds([]);
-      }
-    }
-
-    if (savedCollectors) {
-      try {
-        setCollectors(JSON.parse(savedCollectors) as GarbageCollector[]);
-      } catch {
         setCollectors([]);
+      } finally {
+        setIsLoading(false);
       }
-    }
-
-    setIsLoading(false);
+    })();
   }, [router]);
 
   const archivedHouseholds = useMemo(
@@ -133,43 +165,23 @@ export default function ArchivePage() {
   const currentItems = activeTab === 'households' ? pagedHouseholds : pagedCollectors;
   const currentTotal = activeTab === 'households' ? filteredHouseholds.length : filteredCollectors.length;
 
-  const handleRestore = (id: string) => {
-    if (activeTab === 'households') {
-      const updated = households.map((household) =>
-        household.id === id
-          ? {
-              ...household,
-              status: household.previousStatus === 'active' || household.previousStatus === 'inactive' ? household.previousStatus : 'active',
-              previousStatus: household.previousStatus,
-            }
-          : household
-      );
-      setHouseholds(updated);
-      localStorage.setItem('households', JSON.stringify(updated));
-      addActivity(
-        `${adminUser?.name || 'Admin User'} restored household ${households.find((h) => h.id === id)?.name ?? id}`,
-        adminUser?.name || 'Admin User',
-        'Account Update'
-      );
-      setToastMessage('Household account restored successfully.');
-    } else {
-      const updated = collectors.map((collector) =>
-        collector.id === id
-          ? {
-              ...collector,
-              status: collector.previousStatus === 'active' || collector.previousStatus === 'inactive' ? collector.previousStatus : 'active',
-              previousStatus: collector.previousStatus,
-            }
-          : collector
-      );
-      setCollectors(updated);
-      localStorage.setItem('garbageCollectors', JSON.stringify(updated));
-      addActivity(
-        `${adminUser?.name || 'Admin User'} restored garbage collector ${collectors.find((c) => c.id === id)?.name ?? id}`,
-        adminUser?.name || 'Admin User',
-        'Account Update'
-      );
-      setToastMessage('Garbage collector account restored successfully.');
+  const handleRestore = async (id: string) => {
+    try {
+      if (activeTab === 'households') {
+        const target = households.find((household) => household.id === id);
+        if (!target) return;
+        await adminApi.unarchiveHousehold(target.dbId);
+        setHouseholds((current) => current.filter((household) => household.id !== id));
+        setToastMessage('Household account restored successfully.');
+      } else {
+        const target = collectors.find((collector) => collector.id === id);
+        if (!target) return;
+        await adminApi.unarchiveCollector(target.dbId);
+        setCollectors((current) => current.filter((collector) => collector.id !== id));
+        setToastMessage('Garbage collector account restored successfully.');
+      }
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : 'Unable to restore account.');
     }
 
     setTimeout(() => setToastMessage(null), 2200);

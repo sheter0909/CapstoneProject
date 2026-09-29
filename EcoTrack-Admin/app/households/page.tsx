@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import Modal from '../../components/Modal';
-import { addActivity } from '../../lib/activity';
 import { adminApi, ApiError } from '../../lib/api';
 
 interface Household {
@@ -24,14 +23,8 @@ interface Household {
   violations?: number;
 }
 
-interface AdminUser {
-  email: string;
-  name: string;
-}
-
 export default function HouseholdsPage() {
   const router = useRouter();
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,7 +76,7 @@ export default function HouseholdsPage() {
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [collectionHistory, setCollectionHistory] = useState<any[]>([]);
 
-  // Check authentication on mount and load households from localStorage
+  // Check authentication on mount and load households from the backend
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
     const userStr = localStorage.getItem('adminUser');
@@ -92,8 +85,7 @@ export default function HouseholdsPage() {
       router.push('/login');
     } else {
       try {
-        const user = JSON.parse(userStr);
-        setAdminUser(user);
+        JSON.parse(userStr);
         void adminApi.households('?limit=100').then((result: any) =>
           setHouseholds(
             (result.items ?? []).map((account: any) => ({
@@ -336,29 +328,31 @@ export default function HouseholdsPage() {
     setShowDeleteConfirm(false);
   };
 
-  const handleArchiveHousehold = () => {
+  const handleArchiveHousehold = async () => {
     if (!selectedHousehold) return;
 
     const isRestoring = selectedHousehold.status === 'archived';
-    const nextStatus: Household['status'] = isRestoring ? (selectedHousehold.previousStatus ?? 'active') : 'archived';
-    const nextPreviousStatus: Household['previousStatus'] = isRestoring ? (selectedHousehold.previousStatus ?? 'active') : selectedHousehold.status;
-
-    const updated: Household[] = households.map((h) =>
-      h.id === selectedHousehold.id ? { ...h, status: nextStatus, previousStatus: nextPreviousStatus } : h
-    );
-    setHouseholds(updated);
-    localStorage.setItem('households', JSON.stringify(updated.map(stripPassword)));
-    setSelectedHousehold({ ...selectedHousehold, status: nextStatus, previousStatus: nextPreviousStatus });
-    setShowArchiveConfirm(false);
-    setShowDeleteConfirm(false);
-    setShowUpdateSuccess(true);
-    const message = isRestoring ? 'Household restored successfully' : 'Household archived successfully';
-    setToastMessage(message);
-    addActivity(`${adminUser?.name || 'Admin User'} ${isRestoring ? 'restored' : 'archived'} household ${selectedHousehold.name}`, adminUser?.name || 'Admin User', 'Account Update');
-    setTimeout(() => {
-      setToastMessage(null);
-      setShowUpdateSuccess(false);
-    }, 2200);
+    try {
+      const account = await (isRestoring
+        ? adminApi.unarchiveHousehold(selectedHousehold.id)
+        : adminApi.archiveHousehold(selectedHousehold.id)) as { status: Household['status'] };
+      const updated: Household[] = households.map((h) =>
+        h.id === selectedHousehold.id ? { ...h, status: account.status } : h
+      );
+      setHouseholds(updated);
+      setSelectedHousehold({ ...selectedHousehold, status: account.status });
+      setShowArchiveConfirm(false);
+      setShowDeleteConfirm(false);
+      setShowUpdateSuccess(true);
+      setToastMessage(isRestoring ? 'Household restored successfully' : 'Household archived successfully');
+      setTimeout(() => {
+        setToastMessage(null);
+        setShowUpdateSuccess(false);
+      }, 2200);
+    } catch (error) {
+      setShowArchiveConfirm(false);
+      setToastMessage(error instanceof Error ? error.message : 'Unable to update household status.');
+    }
   };
 
   const handleEdit = (household: Household) => {

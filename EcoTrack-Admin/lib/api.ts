@@ -70,6 +70,17 @@ export interface AdminNotification {
   updatedAt: string;
 }
 
+export interface ActivityLogRecord {
+  id: string;
+  user: string;
+  activityType: string;
+  description: string;
+  status: 'success' | 'pending' | 'failed';
+  timestamp: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CollectionAdminRecord {
   id: string;
   householdId: string;
@@ -194,6 +205,13 @@ export const adminApi = {
   updateCollector: (id: string, body: unknown) => apiRequest<unknown>(`/collectors/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
   households: (query = '') => apiRequest<unknown>(`/households${query}`),
   collectors: (query = '') => apiRequest<unknown>(`/collectors${query}`),
+  archiveHousehold: (id: string) => apiRequest<unknown>(`/households/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
+  unarchiveHousehold: (id: string) => apiRequest<unknown>(`/households/${encodeURIComponent(id)}/unarchive`, { method: 'PATCH' }),
+  archiveCollector: (id: string) => apiRequest<unknown>(`/collectors/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
+  unarchiveCollector: (id: string) => apiRequest<unknown>(`/collectors/${encodeURIComponent(id)}/unarchive`, { method: 'PATCH' }),
+  archivedHouseholds: (query = '') => apiRequest<{ items: unknown[]; total: number; page: number; totalPages: number }>(`/archive/households${query}`),
+  archivedCollectors: (query = '') => apiRequest<{ items: unknown[]; total: number; page: number; totalPages: number }>(`/archive/collectors${query}`),
+  activityLogs: (query = '') => apiRequest<{ items: ActivityLogRecord[]; total: number; page: number; totalPages: number }>(`/activity-logs${query}`),
   dashboardStats: () => apiRequest<unknown>('/dashboard/stats'),
   recentActivity: () => apiRequest<unknown>('/dashboard/recent-activity'),
   householdCollections: (id: string) => apiRequest<unknown[]>(`/households/${encodeURIComponent(id)}/collections`),

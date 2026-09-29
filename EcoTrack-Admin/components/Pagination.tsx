@@ -57,9 +57,9 @@ export default function Pagination({
           >
             ←
           </button>
-          {pageButtons.map((page) =>
+          {pageButtons.map((page, index) =>
             page === -1 ? (
-              <span key={`dots-${Math.random()}`} className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-2xl text-sm text-gray-500">
+              <span key={`dots-${index}`} className="inline-flex h-10 min-w-[2.5rem] items-center justify-center rounded-2xl text-sm text-gray-500">
                 …
               </span>
             ) : (
