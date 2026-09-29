@@ -47,7 +47,7 @@ export const collectorFields = [
 export const notificationFields = [
   body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 120 }).withMessage('Title must be at most 120 characters.'),
   body('message').trim().notEmpty().withMessage('Message is required.').isLength({ max: 2000 }).withMessage('Message must be at most 2000 characters.'),
-  body('recipientType').isIn(['household', 'collector', 'all-households', 'all-collectors']).withMessage('Recipient type must be household, collector, all-households, or all-collectors.'),
+  body('recipientType').isIn(['household', 'collector', 'admin', 'all-households', 'all-collectors']).withMessage('Recipient type must be household, collector, admin, all-households, or all-collectors.'),
   body('householdId').optional().trim(),
   body('collectorId').optional().trim(),
   body('level').optional().trim(),

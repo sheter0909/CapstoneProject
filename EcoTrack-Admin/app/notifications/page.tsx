@@ -24,6 +24,16 @@ function threadKey(note: AdminNotification): string {
   return [note.senderId, target].sort().join('|');
 }
 
+function isReport(note: AdminNotification): boolean {
+  return note.recipientType === 'admin' || note.level.toLowerCase().startsWith('report');
+}
+
+function concernLabel(note: AdminNotification): string {
+  const match = note.level.match(/^report:\s*(.+)$/i);
+  if (match) return match[1].trim();
+  return note.level || 'Report';
+}
+
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
   if (isNaN(date.getTime())) return iso;
@@ -53,11 +63,13 @@ export default function NotificationsPage() {
   const [householdOptions, setHouseholdOptions] = useState<RecipientOption[]>([]);
   const [collectorOptions, setCollectorOptions] = useState<RecipientOption[]>([]);
 
+  const showConcernsOnly = roleFilter === 'concerns';
   const fetchNotifications = async () => {
     setIsLoading(true);
     setLoadError('');
     try {
-      const params = `?limit=100${roleFilter !== 'all' ? `&role=${encodeURIComponent(roleFilter)}` : ''}${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`;
+      const roleParam = roleFilter !== 'all' && !showConcernsOnly ? `&role=${encodeURIComponent(roleFilter)}` : '';
+      const params = `?limit=100${roleParam}${search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`;
       const result = await adminApi.notifications(params);
       setNotifications(result.items ?? []);
     } catch (error) {
@@ -89,6 +101,7 @@ export default function NotificationsPage() {
   const threads = useMemo(() => {
     const grouped = new Map<string, AdminNotification[]>();
     for (const note of notifications) {
+      if (showConcernsOnly && !isReport(note)) continue;
       const key = threadKey(note);
       const list = grouped.get(key) ?? [];
       list.push(note);
@@ -100,7 +113,7 @@ export default function NotificationsPage() {
         messages: [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
       }))
       .sort((a, b) => new Date(b.messages[b.messages.length - 1].createdAt).getTime() - new Date(a.messages[a.messages.length - 1].createdAt).getTime());
-  }, [notifications]);
+  }, [notifications, showConcernsOnly]);
 
   const activeThread = threads.find((thread) => thread.key === selectedThread) ?? null;
   const unreadCount = notifications.filter((note) => !note.read).length;
@@ -130,7 +143,7 @@ export default function NotificationsPage() {
       setTitle('');
       setMessage('');
       setTargetId('');
-      setSendSuccess('Notification sent successfully.');
+      setSendSuccess('Announcement sent successfully.');
       void fetchNotifications();
     } catch (error) {
       setSendError(error instanceof Error ? error.message : 'Unable to send notification.');
@@ -165,7 +178,7 @@ export default function NotificationsPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
           {/* Compose */}
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)] lg:col-span-2">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Send Notification</h3>
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Send Announcement</h3>
             <form onSubmit={handleSend} className="space-y-4">
               <div>
                 <label className="block text-base font-semibold text-gray-700 mb-1">Recipient type</label>
@@ -252,7 +265,7 @@ export default function NotificationsPage() {
                 disabled={isSending}
                 className="w-full rounded-2xl bg-green-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSending ? 'Sending...' : 'Send Notification'}
+                {isSending ? 'Sending...' : 'Send Announcement'}
               </button>
             </form>
           </div>
@@ -276,6 +289,7 @@ export default function NotificationsPage() {
                   className="rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-green-500"
                 >
                   <option value="all">All senders</option>
+                  <option value="concerns">Concerns only</option>
                   <option value="admin">Admin</option>
                   <option value="collector">Collectors</option>
                   <option value="household">Households</option>
@@ -311,6 +325,11 @@ export default function NotificationsPage() {
                       >
                         <div className="flex items-center gap-2">
                           <p className="text-base font-semibold text-gray-800">{last.title}</p>
+                          {isReport(last) && (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                              🚩 {concernLabel(last)}
+                            </span>
+                          )}
                           {unread && <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" aria-label="Unread" />}
                         </div>
                         <p className="mt-0.5 truncate text-sm text-gray-500">
@@ -343,6 +362,11 @@ export default function NotificationsPage() {
                             {msg.senderName} • {msg.senderRole}
                           </p>
                           <p className="mt-1 text-base font-semibold">{msg.title}</p>
+                          {isReport(msg) && (
+                            <span className={`mt-1 inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${isAdmin ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                              🚩 {concernLabel(msg)}
+                            </span>
+                          )}
                           <p className="mt-0.5 text-base">{msg.message}</p>
                           <div className="mt-1.5 flex items-center gap-2">
                             <span className={`text-xs ${isAdmin ? 'text-green-100' : 'text-gray-400'}`}>{formatDateTime(msg.createdAt)}</span>

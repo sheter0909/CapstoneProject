@@ -19,6 +19,12 @@ async function logActivity(user: string, activityType: string, description: stri
 function publicAccount(account: any) { const { password: _password, passwordDisplay: _pd, ...safeAccount } = account; return safeAccount; }
 function adminHousehold(account: any) { if (!account) return null; const { password: _password, passwordDisplay, ...rest } = account; return { ...rest, password: decryptPasswordDisplay(passwordDisplay) }; }
 function adminCollector(account: any) { if (!account) return null; const { password: _password, passwordDisplay, ...rest } = account; return { ...rest, password: decryptPasswordDisplay(passwordDisplay) }; }
+// Informational only: how many Warning-level notifications a household has received.
+async function violationCounts(householdIds: string[]): Promise<Record<string, number>> {
+  if (householdIds.length === 0) return {};
+  const grouped = await prisma.notification.groupBy({ by: ['householdId'], where: { householdId: { in: householdIds }, level: { contains: 'warning', mode: 'insensitive' } }, _count: { householdId: true } });
+  return Object.fromEntries(grouped.map((row) => [row.householdId, row._count.householdId]));
+}
 function cryptoToken() { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 export function normalizeDateString(d: string | null | undefined): string | null {
@@ -113,7 +119,8 @@ router.get('/households', requireAuth('admin'), pagination, validateRequest, asy
       status: { not: 'archived' },
       ...(search ? { OR: [{ fullName: { contains: search, mode: 'insensitive' } }, { householdId: { contains: search, mode: 'insensitive' } }] } : {}),
     });
-    return ok(res, { ...result, items: result.items.map(adminHousehold) });
+    const counts = await violationCounts(result.items.map((item: any) => item.householdId));
+    return ok(res, { ...result, items: result.items.map((item: any) => ({ ...adminHousehold(item), violationCount: counts[item.householdId] ?? 0 })) });
   } catch (error) {
     next(error);
   }
@@ -126,7 +133,8 @@ router.get('/households/:id', requireAuth('admin'), idParam, validateRequest, as
   try {
     const household = await prisma.household.findUnique({ where: { id: String(req.params.id) } });
     if (!household) return fail(res, 404, 'Household not found.');
-    return ok(res, adminHousehold(household));
+    const counts = await violationCounts([household.householdId]);
+    return ok(res, { ...adminHousehold(household), violationCount: counts[household.householdId] ?? 0 });
   } catch (error) {
     next(error);
   }
@@ -340,8 +348,8 @@ router.post('/notifications', requireAuth('admin', 'collector', 'household'), no
     if (sender.role === 'collector' && (recipientType === 'collector' || recipientType === 'all-collectors')) {
       return fail(res, 403, 'Collectors can only send messages to households or broadcast to households.');
     }
-    if (sender.role === 'household' && recipientType !== 'collector') {
-      return fail(res, 403, 'Households can only send messages to a garbage collector.');
+    if (sender.role === 'household' && recipientType !== 'collector' && recipientType !== 'admin') {
+      return fail(res, 403, 'Households can only send messages to a garbage collector or file a report to the admin.');
     }
 
     let householdId: string | null = null;
@@ -352,14 +360,16 @@ router.post('/notifications', requireAuth('admin', 'collector', 'household'), no
       if (!target) return fail(res, 400, 'householdId is required for household messages.');
       const exists = await prisma.household.findUnique({ where: { householdId: target } });
       if (!exists) return fail(res, 404, 'Target household not found.');
-      householdId = target;
+      householdId = exists.householdId;
     }
     if (recipientType === 'collector') {
-      const target = String(req.body.collectorId ?? '').trim();
+      // Collector login normalizes identifiers with toUpperCase (see auth.ts),
+      // so normalize here too — otherwise a lowercase "gc-0003" would 404.
+      const target = String(req.body.collectorId ?? '').trim().toUpperCase();
       if (!target) return fail(res, 400, 'collectorId is required for collector messages.');
       const exists = await prisma.garbageCollector.findFirst({ where: { collectorId: target } });
       if (!exists) return fail(res, 404, 'Target collector not found.');
-      collectorId = target;
+      collectorId = exists.collectorId;
     }
 
     const notification = await prisma.notification.create({

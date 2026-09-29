@@ -8,6 +8,7 @@ const menuItems = [
   { label: 'Main', href: '/garbagecollector', segment: 'garbagecollector' },
   { label: 'Quick Scan', href: '/garbagecollector/quick-scan', segment: 'quick-scan' },
   { label: 'Notifications', href: '/garbagecollector/notifications', segment: 'notifications' },
+  { label: 'Flag & Contact', href: '/garbagecollector/contact', segment: 'contact' },
   { label: 'Activity Logs', href: '/garbagecollector/activity-logs', segment: 'activity-logs' },
   { label: 'Reports', href: '/garbagecollector/reports', segment: 'reports' },
 ];

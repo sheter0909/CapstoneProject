@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 import { householdApi, NotificationItem } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
@@ -18,29 +18,6 @@ export default function HouseholdNotificationsScreen() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showCompose, setShowCompose] = useState(false);
-  const [collectorId, setCollectorId] = useState('');
-  const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState('');
-  const [sendSuccess, setSendSuccess] = useState('');
-
-  const loadNotifications = () => {
-    setLoading(true);
-    setError('');
-    householdApi
-      .notifications()
-      .then((items) => {
-        setNotifications(Array.isArray(items) ? items : []);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Unable to load notifications.');
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -69,34 +46,6 @@ export default function HouseholdNotificationsScreen() {
     }
   };
 
-  const handleSend = async () => {
-    setSendError('');
-    setSendSuccess('');
-    if (!collectorId.trim() || !title.trim() || !message.trim()) {
-      setSendError('Collector ID, title, and message are required.');
-      return;
-    }
-    setSending(true);
-    try {
-      await householdApi.sendNotification({
-        title: title.trim(),
-        message: message.trim(),
-        recipientType: 'collector',
-        collectorId: collectorId.trim(),
-        level: 'Household Concern',
-      });
-      setCollectorId('');
-      setTitle('');
-      setMessage('');
-      setSendSuccess('Message sent to garbage collector.');
-      loadNotifications();
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : 'Unable to send message.');
-    } finally {
-      setSending(false);
-    }
-  };
-
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   return (
@@ -106,46 +55,6 @@ export default function HouseholdNotificationsScreen() {
           Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ''}
         </Text>
         <Text style={styles.subtitle}>Important updates, reminders, and alerts regarding waste collection.</Text>
-
-        <Pressable style={styles.composeToggle} onPress={() => setShowCompose((value) => !value)}>
-          <Text style={styles.composeToggleText}>{showCompose ? 'Hide message form' : 'Message your garbage collector'}</Text>
-        </Pressable>
-
-        {showCompose ? (
-          <View style={styles.composeBox}>
-            <Text style={styles.label}>Collector ID</Text>
-            <TextInput
-              style={styles.input}
-              value={collectorId}
-              onChangeText={setCollectorId}
-              placeholder="e.g. GC-0003"
-              placeholderTextColor="#999"
-              autoCapitalize="characters"
-            />
-            <Text style={styles.label}>Title</Text>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Missed collection"
-              placeholderTextColor="#999"
-            />
-            <Text style={styles.label}>Message</Text>
-            <TextInput
-              style={[styles.input, styles.messageInput]}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Describe your concern..."
-              placeholderTextColor="#999"
-              multiline
-            />
-            {sendError ? <Text style={styles.errorText}>{sendError}</Text> : null}
-            {sendSuccess ? <Text style={styles.successText}>{sendSuccess}</Text> : null}
-            <Pressable style={styles.primaryButton} onPress={handleSend} disabled={sending}>
-              <Text style={styles.primaryButtonText}>{sending ? 'Sending...' : 'Send Message'}</Text>
-            </Pressable>
-          </View>
-        ) : null}
 
         {loading ? (
           <View style={styles.stateBox}>
@@ -220,56 +129,6 @@ const styles = StyleSheet.create({
     color: '#555',
     fontSize: 14,
     marginBottom: Spacing.two,
-  },
-  composeToggle: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#F3F9F4',
-  },
-  composeToggleText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  composeBox: {
-    gap: 8,
-    backgroundColor: '#F6F9F6',
-    borderRadius: 18,
-    padding: Spacing.three,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A4A4A',
-  },
-  input: {
-    height: 48,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#D9D9D9',
-    backgroundColor: '#FFFFFF',
-    fontSize: 15,
-  },
-  messageInput: {
-    height: 96,
-    paddingTop: 12,
-    textAlignVertical: 'top',
-  },
-  primaryButton: {
-    backgroundColor: '#1F7A37',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 15,
   },
   stateBox: {
     paddingVertical: Spacing.four,

@@ -1,59 +1,85 @@
-import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Spacing } from '@/constants/theme';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import CollectionHistory, { HistoryRow } from '@/components/collection-history';
 import { collectorApi } from '@/lib/api';
 
-type Entry = { id: string; householdId: string; segregationStatus: string; wasteType: string; weightKg: number | string; timestamp: string; editedAt?: string | null };
+type Entry = {
+  id: string;
+  householdId: string;
+  segregationStatus: string;
+  wasteType: string;
+  weightKg: number | string;
+  timestamp: string;
+};
 
 export default function GarbageCollectorActivityLogsScreen() {
-  const router = useRouter();
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    collectorApi.activityLogs().then((result: any) => setEntries(result.items ?? [])).catch((requestError) => setError(requestError instanceof Error ? requestError.message : 'Unable to load entries.'));
+    let mounted = true;
+    collectorApi
+      .activityLogs()
+      .then((result: any) => {
+        if (mounted) setEntries(result.items ?? []);
+      })
+      .catch((e) => mounted && setError(e instanceof Error ? e.message : 'Unable to load entries.'))
+      .finally(() => mounted && setLoading(false));
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const canEdit = (entry: Entry) => Date.now() - new Date(entry.timestamp).getTime() <= 2 * 60 * 60 * 1000;
-  const openEdit = (entry: Entry) => router.push({ pathname: '/garbagecollector/garbage-input' as any, params: { entryId: entry.id, householdId: entry.householdId, segregated: entry.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated', wasteType: entry.wasteType === 'non_biodegradable' ? 'Non-biodegradable' : entry.wasteType.charAt(0).toUpperCase() + entry.wasteType.slice(1), weight: String(entry.weightKg) } });
+  const rows: HistoryRow[] = useMemo(
+    () =>
+      entries.map((e) => {
+        const d = new Date(e.timestamp);
+        const timeLabel = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        return {
+          id: e.id,
+          timestamp: e.timestamp,
+          timeLabel,
+          title: 'Household Collected',
+          subtitle: `Household ${e.householdId} · ${e.wasteType} · ${String(e.weightKg)} kg`,
+          tag: 'Done',
+          tagTone: 'green',
+          statusKey: 'Done',
+          searchText: `household collected ${e.householdId} ${e.wasteType} done ${dateStr} ${d.toLocaleDateString()}`,
+        };
+      }),
+    [entries]
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="small" color="#1F7A37" />
+        <Text style={styles.muted}>Loading collection history...</Text>
+      </View>
+    );
+  }
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Activity Logs</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {entries.length === 0 && !error ? <Text style={styles.empty}>No collection entries yet.</Text> : null}
-        {entries.map((entry) => (
-          <View key={entry.id} style={styles.logItem}>
-            <View style={styles.content}>
-              <Text style={styles.logTitle}>Household {entry.householdId}</Text>
-              <Text style={styles.subtitle}>{entry.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'} · {entry.wasteType} · {entry.weightKg} kg{entry.editedAt ? ' · edited' : ''}</Text>
-              <Text style={styles.time}>{new Date(entry.timestamp).toLocaleString()}</Text>
-            </View>
-            {canEdit(entry) ? <Pressable style={styles.editButton} onPress={() => openEdit(entry)}><Text style={styles.editText}>Edit</Text></Pressable> : <Text style={styles.locked}>Locked</Text>}
-          </View>
-        ))}
-        <Pressable style={styles.primaryButton} onPress={() => router.push('/garbagecollector/reports' as any)}><Text style={styles.primaryText}>View Reports</Text></Pressable>
-      </View>
-    </ScrollView>
+    <CollectionHistory
+      searchPlaceholder="Search by household, address, or zone"
+      rows={rows}
+      statusFilters={['All', 'Done', 'Skipped', 'Issue']}
+      emptyHint="Try a different household, address, zone, or date."
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: Spacing.four },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: Spacing.four, gap: Spacing.four },
-  title: { fontSize: 24, fontWeight: '800', color: '#1F7A37' },
-  logItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F7F9F7', borderRadius: 18, padding: Spacing.four, marginBottom: Spacing.two },
-  content: { flex: 1, gap: Spacing.one },
-  logTitle: { fontWeight: '700', color: '#1F7A37' },
-  subtitle: { color: '#4A4A4A' },
-  time: { color: '#777', fontSize: 12 },
-  editButton: { backgroundColor: '#1F7A37', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
-  editText: { color: '#FFFFFF', fontWeight: '800' },
-  locked: { color: '#999', fontWeight: '700' },
-  empty: { color: '#4A4A4A' },
-  error: { color: '#A12727', fontWeight: '700' },
-  primaryButton: { backgroundColor: '#1F7A37', borderRadius: 18, paddingVertical: 16, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontWeight: '800' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 24 },
+  muted: { color: '#6B7280' },
+  error: { color: '#C62828', fontWeight: '700' },
 });

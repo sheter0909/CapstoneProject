@@ -44,5 +44,9 @@ export function validateRequest(req: Request, res: Response, next: NextFunction)
 
 export function handleError(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   console.error(error);
+  if (process.env.NODE_ENV !== 'production') {
+    const detail = error instanceof Error ? error.message : String(error);
+    return fail(res, 500, `Internal server error. (${detail})`);
+  }
   return fail(res, 500, 'Internal server error.');
 }

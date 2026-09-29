@@ -8,6 +8,7 @@ const menuItems = [
   { label: 'Main', href: '/household', segment: 'household' },
   { label: 'Collection History', href: '/household/history', segment: 'history' },
   { label: 'Notifications', href: '/household/notifications', segment: 'notifications' },
+  { label: 'Report', href: '/household/report', segment: 'report' },
   { label: 'My QR Code', href: '/household/qr', segment: 'qr' },
 ];
 

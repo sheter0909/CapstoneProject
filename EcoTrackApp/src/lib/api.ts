@@ -66,7 +66,7 @@ export type NotificationItem = {
 export type SendNotificationBody = {
   title: string;
   message: string;
-  recipientType: 'household' | 'collector' | 'all-households' | 'all-collectors';
+  recipientType: 'household' | 'collector' | 'admin' | 'all-households' | 'all-collectors';
   householdId?: string;
   collectorId?: string;
   level?: string;

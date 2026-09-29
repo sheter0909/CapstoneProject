@@ -5,12 +5,30 @@ import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { CollectionHistoryItem, householdApi, NotificationItem } from '@/lib/api';
 
+const COMPLIANT_MESSAGES = [
+  {
+    title: 'Great job!',
+    body: 'Your household is currently compliant. Keep segregating your waste properly.',
+  },
+  {
+    title: "You're doing great!",
+    body: 'No violations recorded. Keep up the proper waste segregation.',
+  },
+  {
+    title: 'Well done!',
+    body: 'Your household is in good standing. Continue segregating your waste correctly.',
+  },
+];
+
 export default function HouseholdHomeScreen() {
   const router = useRouter();
   const { householdUser, hydrated, refreshHouseholdProfile } = useAuth();
   const [latestHistory, setLatestHistory] = useState<CollectionHistoryItem | null>(null);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [compliantMessage] = useState(
+    () => COMPLIANT_MESSAGES[Math.floor(Math.random() * COMPLIANT_MESSAGES.length)],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -62,11 +80,11 @@ export default function HouseholdHomeScreen() {
 
       <View style={isCompliant ? styles.compliantBanner : styles.attentionBanner}>
         <Text style={isCompliant ? styles.compliantTitle : styles.attentionTitle}>
-          {isCompliant ? 'Great job!' : 'Attention needed'}
+          {isCompliant ? compliantMessage.title : 'Attention needed'}
         </Text>
         <Text style={isCompliant ? styles.compliantText : styles.attentionText}>
           {isCompliant
-            ? 'Your household is currently compliant. Keep segregating your waste properly.'
+            ? compliantMessage.body
             : 'Your latest collection was marked as not properly segregated. Please segregate before the next collection.'}
         </Text>
       </View>

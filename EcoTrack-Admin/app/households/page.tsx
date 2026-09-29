@@ -21,6 +21,7 @@ interface Household {
   username?: string;
   lastCollection?: string;
   history?: any[];
+  violations?: number;
 }
 
 interface AdminUser {
@@ -104,6 +105,7 @@ export default function HouseholdsPage() {
               birthdate: account.birthdate ?? '',
               joinDate: account.joinDate,
               status: account.status,
+              violations: account.violationCount ?? 0,
             }))
           )
         );
@@ -644,11 +646,12 @@ export default function HouseholdsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed text-sm text-gray-600">
                   <colgroup>
-                    <col className="w-[15%]" />
-                    <col className="w-[23%]" />
-                    <col className="w-[17%]" />
                     <col className="w-[13%]" />
-                    <col className="w-[18%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[16%]" />
                     <col className="w-[14%]" />
                   </colgroup>
                   <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-[0.2em] text-gray-500">
@@ -657,6 +660,7 @@ export default function HouseholdsPage() {
                       <th className="break-words px-2 py-3 sm:px-3">Head of Household</th>
                       <th className="break-words px-2 py-3 sm:px-3">Purok</th>
                       <th className="break-words px-2 py-3 sm:px-3">Status</th>
+                      <th className="break-words px-2 py-3 sm:px-3">Violations</th>
                       <th className="break-words px-2 py-3 sm:px-3">Last Collection</th>
                       <th className="break-words px-2 py-3 sm:px-3">Action</th>
                     </tr>
@@ -678,6 +682,17 @@ export default function HouseholdsPage() {
                             }`}
                           >
                             {household.status}
+                          </span>
+                        </td>
+                        <td className="break-words px-2 py-4 text-sm sm:px-3">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              (household.violations ?? 0) > 0
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {household.violations ?? 0}
                           </span>
                         </td>
                         <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{new Date(household.joinDate).toLocaleDateString()}</td>
@@ -743,6 +758,18 @@ export default function HouseholdsPage() {
                       }`}
                     >
                       {selectedHousehold.status}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Violations</p>
+                    <span
+                      className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        (selectedHousehold.violations ?? 0) > 0
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {selectedHousehold.violations ?? 0}
                     </span>
                   </div>
                 </div>
