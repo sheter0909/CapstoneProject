@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import CollectionHistory, { HistoryRow } from '@/components/collection-history';
-import { collectorApi } from '@/lib/api';
+import { CollectionHistoryItem, collectorApi } from '@/lib/api';
 
-type Entry = {
-  id: string;
-  householdId: string;
-  segregationStatus: string;
-  wasteType: string;
-  weightKg: number | string;
-  timestamp: string;
-};
+function toWasteTypeLabel(raw: string): string {
+  if (raw === 'mixed') return 'Mixed';
+  if (raw === 'non_biodegradable') return 'Non-biodegradable';
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
 
 export default function GarbageCollectorActivityLogsScreen() {
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const router = useRouter();
+  const [entries, setEntries] = useState<CollectionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -21,7 +20,7 @@ export default function GarbageCollectorActivityLogsScreen() {
     let mounted = true;
     collectorApi
       .activityLogs()
-      .then((result: any) => {
+      .then((result: { items?: CollectionHistoryItem[] }) => {
         if (mounted) setEntries(result.items ?? []);
       })
       .catch((e) => mounted && setError(e instanceof Error ? e.message : 'Unable to load entries.'))
@@ -48,6 +47,7 @@ export default function GarbageCollectorActivityLogsScreen() {
           tagTone: 'green',
           statusKey: 'Done',
           searchText: `household collected ${e.householdId} ${wasteLabel} ${e.wasteType} done ${dateStr} ${d.toLocaleDateString()}`,
+          canEdit: e.editable === true,
         };
       }),
     [entries]
@@ -75,6 +75,21 @@ export default function GarbageCollectorActivityLogsScreen() {
       rows={rows}
       statusFilters={['All', 'Done', 'Skipped', 'Issue']}
       emptyHint="Try a different household, address, zone, or date."
+      onEdit={(row) => {
+        const entry = entries.find((e) => e.id === row.id);
+        if (!entry) return;
+        router.push({
+          pathname: '/garbagecollector/garbage-input' as any,
+          params: {
+            entryId: entry.id,
+            householdId: entry.householdId,
+            segregated: entry.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated',
+            wasteType: toWasteTypeLabel(entry.wasteType),
+            weight: String(entry.weightKg),
+            ...(entry.editableUntil ? { editableUntil: entry.editableUntil } : {}),
+          },
+        });
+      }}
     />
   );
 }

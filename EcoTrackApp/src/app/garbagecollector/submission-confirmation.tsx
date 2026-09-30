@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 
 export default function SubmissionConfirmationScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ entryId: string; householdId: string; segregated: string; wasteType: string; weight: string; edited?: string; warningLevel?: string; warningRemoved?: string }>();
-  const editAllowed = Boolean(params.entryId);
+  const params = useLocalSearchParams<{ entryId: string; householdId: string; segregated: string; wasteType: string; weight: string; edited?: string; warningLevel?: string; warningRemoved?: string; editableUntil?: string }>();
+  const [nowMs] = useState(() => Date.now());
+  const editAllowed = Boolean(params.entryId) && (!params.editableUntil || nowMs < new Date(params.editableUntil).getTime());
   const warningLevel = params.warningLevel?.trim() ?? '';
   const warningRemoved = params.warningRemoved === 'true';
 

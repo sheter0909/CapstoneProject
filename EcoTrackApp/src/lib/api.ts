@@ -14,7 +14,35 @@ function logApiBaseOnce() {
 }
 const REQUEST_TIMEOUT_MS = 90_000;
 
-export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: unknown };
+export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown };
+
+export type FieldError = {
+  field: string;
+  message: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+  errors?: FieldError[];
+
+  constructor(message: string, status: number, errors?: FieldError[]) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.errors = errors;
+  }
+}
+
+function toFieldErrors(value: unknown): FieldError[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const parsed = (value as unknown[]).filter(
+    (item): item is FieldError =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as { message?: unknown }).message === 'string'
+  );
+  return parsed.length > 0 ? parsed : undefined;
+}
 
 export type HouseholdUser = {
   id: string;
@@ -53,6 +81,8 @@ export type CollectionHistoryItem = {
   editedAt?: string | null;
   warning?: CollectionWarning | null;
   warningRemoved?: boolean;
+  editable?: boolean;
+  editableUntil?: string;
 };
 
 export type HouseholdSummary = {
@@ -127,8 +157,18 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 
     if (response.ok && payload?.success) return payload.data;
 
+    const fieldErrors = toFieldErrors(payload?.errors);
+    // Client errors (4xx) are final — do not retry.
+    if (response.status >= 400 && response.status < 500) {
+      const message = fieldErrors?.[0]?.message ?? payload?.message ?? `API request failed (${response.status} ${method} ${API_URL}${path})`;
+      throw new ApiError(message, response.status, fieldErrors);
+    }
+
     // The backend answered with an explicit error — final, do not retry.
-    if (payload?.message) throw new Error(payload.message);
+    if (payload?.message) {
+      const message = fieldErrors?.[0]?.message ?? payload.message;
+      throw new ApiError(message, response.status, fieldErrors);
+    }
 
     // No usable message (e.g. a proxy/idle-server HTML page): transient, retry.
     lastError = new Error(`API request failed (${response.status} ${method} ${API_URL}${path})`);
@@ -202,7 +242,7 @@ export const collectorApi = {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
-  activityLogs: () => apiRequest<unknown>('/collectors/me/activity-logs'),
+  activityLogs: () => apiRequest<{ items: CollectionHistoryItem[]; total: number; page: number; totalPages: number }>('/collectors/me/activity-logs'),
   reports: () => apiRequest<unknown>('/collectors/me/reports'),
   notifications: () => apiRequest<NotificationItem[]>('/collectors/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>

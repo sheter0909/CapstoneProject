@@ -12,6 +12,7 @@ export type HistoryRow = {
   tagTone: 'green' | 'red' | 'gray' | 'orange';
   searchText: string;
   statusKey: string;
+  canEdit?: boolean;
 };
 
 export type HistorySection = { title: string; data: HistoryRow[] };
@@ -58,12 +59,14 @@ export default function CollectionHistory({
   rows,
   statusFilters,
   emptyHint,
+  onEdit,
 }: {
   title?: string;
   searchPlaceholder: string;
   rows: HistoryRow[];
   statusFilters: string[];
   emptyHint: string;
+  onEdit?: (row: HistoryRow) => void;
 }) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -161,6 +164,11 @@ export default function CollectionHistory({
                 <Text style={styles.rowTitle}>{item.title}</Text>
                 <Text style={styles.rowSub}>{item.subtitle}</Text>
               </View>
+              {item.canEdit && onEdit ? (
+                <Pressable accessibilityLabel={`Edit entry ${item.id}`} style={styles.editBtn} onPress={() => onEdit(item)}>
+                  <Text style={styles.editBtnText}>Edit</Text>
+                </Pressable>
+              ) : null}
               <View style={[styles.tag, styles[`tag_${item.tagTone}`]]}>
                 <Text style={[styles.tagText, styles[`tagText_${item.tagTone}`]]}>{item.tag}</Text>
               </View>
@@ -215,6 +223,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   rowLeft: { flex: 1, gap: 2, paddingRight: 12 },
+  editBtn: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#E8F7E9', marginRight: 8 },
+  editBtnText: { color: GREEN, fontWeight: '800', fontSize: 13 },
   time: { color: GRAY, fontSize: 11 },
   rowTitle: { color: NAVY, fontWeight: '800', fontSize: 15 },
   rowSub: { color: GRAY, fontSize: 12 },

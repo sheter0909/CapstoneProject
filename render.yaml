@@ -15,5 +15,7 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 1d
+      - key: NODE_ENV
+        value: production
       - key: CORS_ORIGINS
         sync: false

@@ -14,16 +14,17 @@ function toWasteTypeLabel(raw: CollectionHistoryItem['wasteType']): string {
 export default function GarbageCollectorScanResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ householdId?: string }>();
-  const targetId = params.householdId || '0123';
+  const targetId = params.householdId?.trim() ?? '';
 
   const [household, setHousehold] = useState<HouseholdUser | null>(null);
   const [history, setHistory] = useState<CollectionHistoryItem[]>([]);
   const [notSegregatedCount, setNotSegregatedCount] = useState(0);
   const [nextWarningLevel, setNextWarningLevel] = useState('a warning');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(targetId !== '');
+  const [error, setError] = useState(targetId === '' ? 'Missing household. Please scan again.' : '');
 
   useEffect(() => {
+    if (!targetId) return;
     let isMounted = true;
     collectorApi
       .householdSummary(targetId)
@@ -53,6 +54,10 @@ export default function GarbageCollectorScanResultsScreen() {
   const address = [household?.purok, household?.address].filter(Boolean).join(', ') || 'Not specified';
   const status = household?.status ? household.status.toUpperCase() : 'ACTIVE';
   const lastVisit = history[0] ? new Date(history[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'None';
+  const mostRecent = history[0];
+  const [nowMs] = useState(() => Date.now());
+  const collectedThisWeek = Boolean(mostRecent && nowMs - new Date(mostRecent.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000);
+  const editBlocked = collectedThisWeek && mostRecent?.editable !== true;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -105,22 +110,26 @@ export default function GarbageCollectorScanResultsScreen() {
               )}
             </View>
 
-            <Pressable
-              style={styles.primaryButton}
-              onPress={() => {
-                const navParams: Record<string, string> = { householdId: household?.householdId || targetId, nextWarningLevel };
-                const mostRecent = history[0];
-                if (mostRecent && Date.now() - new Date(mostRecent.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000) {
-                  navParams.entryId = mostRecent.id;
-                  navParams.segregated = mostRecent.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated';
-                  navParams.wasteType = toWasteTypeLabel(mostRecent.wasteType);
-                  navParams.weight = String(mostRecent.weightKg);
-                }
-                router.push({ pathname: '/garbagecollector/garbage-input' as any, params: navParams });
-              }}
-            >
-              <Text style={styles.primaryButtonText}>Proceed to Collection Input</Text>
-            </Pressable>
+            {editBlocked ? (
+              <Text style={styles.errorText}>Already collected this week. Editing is closed.</Text>
+            ) : (
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() => {
+                  const navParams: Record<string, string> = { householdId: household?.householdId || targetId, nextWarningLevel };
+                  if (mostRecent?.editable === true) {
+                    navParams.entryId = mostRecent.id;
+                    navParams.segregated = mostRecent.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated';
+                    navParams.wasteType = toWasteTypeLabel(mostRecent.wasteType);
+                    navParams.weight = String(mostRecent.weightKg);
+                    if (mostRecent.editableUntil) navParams.editableUntil = mostRecent.editableUntil;
+                  }
+                  router.push({ pathname: '/garbagecollector/garbage-input' as any, params: navParams });
+                }}
+              >
+                <Text style={styles.primaryButtonText}>Proceed to Collection Input</Text>
+              </Pressable>
+            )}
           </>
         )}
 

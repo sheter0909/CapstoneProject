@@ -9,8 +9,9 @@ const wasteTypes = ['Biodegradable', 'Recyclable', 'Non-biodegradable'];
 
 export default function GarbageCollectorGarbageInputScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ entryId?: string; householdId?: string; segregated?: string; wasteType?: string; weight?: string; nextWarningLevel?: string }>();
+  const params = useLocalSearchParams<{ entryId?: string; householdId?: string; segregated?: string; wasteType?: string; weight?: string; nextWarningLevel?: string; editableUntil?: string }>();
   const editing = Boolean(params.entryId);
+  const householdId = params.householdId?.trim() ?? '';
   const nextWarningLabel = params.nextWarningLevel?.trim() ? params.nextWarningLevel.trim() : 'a warning';
   const initialSegregated = params.segregated === 'not-segregated' ? 'not-segregated' : params.segregated === 'segregated' ? 'segregated' : null;
   const initialWasteType = initialSegregated === 'segregated' && params.wasteType && params.wasteType.toLowerCase() !== 'mixed' ? params.wasteType : '';
@@ -28,22 +29,33 @@ export default function GarbageCollectorGarbageInputScreen() {
 
   const submit = async () => {
     setError('');
+    if (!householdId) return setError('Missing household. Please go back to Quick Scan and scan again.');
     if (!segregated) return setError('Choose Segregated or Not Segregated.');
     if (segregated === 'segregated' && !wasteType) return setError('Choose a waste type.');
     const numericWeight = Number(weight);
     if (!weight || !Number.isFinite(numericWeight) || numericWeight < 0 || numericWeight > 15) return setError('Weight must be between 0 and 15 kg.');
     setSaving(true);
     try {
-      const body: { householdId: string; segregationStatus: string; weightKg: number; wasteType?: string } = { householdId: String(params.householdId ?? '0123'), segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', weightKg: numericWeight };
+      const body: { householdId: string; segregationStatus: string; weightKg: number; wasteType?: string } = { householdId, segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', weightKg: numericWeight };
       if (segregated === 'segregated') body.wasteType = wasteType.toLowerCase().replace('-', '_');
       const entry = editing ? await collectorApi.updateCollection(String(params.entryId), body) : await collectorApi.submitCollection(body);
-      router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '' } });
+      router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '', editableUntil: entry.editableUntil ?? params.editableUntil ?? '' } });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to save this entry.'); } finally { setSaving(false); }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
+        {!householdId ? (
+          <>
+            <Text style={styles.title}>Garbage Input</Text>
+            <Text style={styles.errorText}>Missing household. Please go back to Quick Scan and scan again.</Text>
+            <Pressable style={styles.linkButton} onPress={() => router.replace('/garbagecollector/quick-scan' as any)}>
+              <Text style={styles.linkText}>Back to Quick Scan</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
         <Text style={styles.title}>{editing ? 'Edit Entry' : 'Garbage Input'}</Text>
         <Text style={styles.subtitle}>Record the collection details for this household.</Text>
 
@@ -61,6 +73,10 @@ export default function GarbageCollectorGarbageInputScreen() {
             <Text style={[styles.statusButtonText, segregated === 'not-segregated' && styles.statusButtonTextRed]}>Not Segregated</Text>
           </Pressable>
         </View>
+
+        {segregated === 'not-segregated' && (
+          <Text style={styles.autoWasteType}>Waste Type: Mixed (automatic)</Text>
+        )}
 
         {segregated === 'segregated' && (
           <View style={styles.inputCard}>
@@ -118,6 +134,8 @@ export default function GarbageCollectorGarbageInputScreen() {
         <Pressable style={styles.linkButton} onPress={() => safeBack(router, '/garbagecollector')}>
           <Text style={styles.linkText}>{editing ? 'Cancel' : 'Back to results'}</Text>
         </Pressable>
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -181,6 +199,11 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontWeight: '700',
     color: '#4A4A4A',
+  },
+  autoWasteType: {
+    fontWeight: '700',
+    color: '#4A4A4A',
+    textAlign: 'center',
   },
   selectBox: {
     backgroundColor: '#F7F7F7',

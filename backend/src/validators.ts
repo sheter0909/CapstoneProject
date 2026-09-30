@@ -66,5 +66,5 @@ export const collectionFields = [
       }
       return true;
     }),
-  body('weightKg').isFloat({ min: 0, max: 15 }).withMessage('Weight must be a number between 0 and 15 kg.').toFloat(),
+  body('weightKg').customSanitizer((value) => String(value)).isFloat({ min: 0, max: 15 }).withMessage('Weight must be a number between 0 and 15 kg.').toFloat(),
 ];

@@ -20,8 +20,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
-app.get('/', (_req, res) => res.json({ status: 'ok', service: 'EcoTrack API' }));
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+const commit = (process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7);
+app.get('/', (_req, res) => res.json({ status: 'ok', service: 'EcoTrack API', commit }));
+app.get('/health', (_req, res) => res.json({ status: 'ok', commit }));
 app.use('/api', router);
 app.use(handleError);
 
