@@ -28,10 +28,10 @@ export default function GarbageCollectorHomeScreen() {
 
   const totalWaste = reports.reduce((sum, item) => sum + Number(item.totalKg || 0), 0);
   const segregatedWaste = reports
-    .filter((item) => item._id !== 'non_biodegradable' && item._id !== 'not_segregated')
+    .filter((item) => item._id === 'biodegradable' || item._id === 'recyclable' || item._id === 'non_biodegradable')
     .reduce((sum, item) => sum + Number(item.totalKg || 0), 0);
   const nonSegregatedWaste = reports
-    .filter((item) => item._id === 'non_biodegradable' || item._id === 'not_segregated')
+    .filter((item) => item._id === 'mixed' || item._id === 'not_segregated')
     .reduce((sum, item) => sum + Number(item.totalKg || 0), 0);
 
   const hour = new Date().getHours();
@@ -53,23 +53,9 @@ export default function GarbageCollectorHomeScreen() {
       <View style={styles.statsCard}>
         <Text style={styles.sectionTitle}>Collection Overview</Text>
         <Text style={styles.statText}>Total Waste Logged: {totalWaste.toFixed(1)} kg</Text>
-        <Text style={styles.statText}>Segregated / Recyclable: {segregatedWaste.toFixed(1)} kg</Text>
+        <Text style={styles.statText}>Segregated: {segregatedWaste.toFixed(1)} kg</Text>
         <Text style={styles.statText}>Non-segregated: {nonSegregatedWaste.toFixed(1)} kg</Text>
       </View>
-
-      <Pressable style={styles.actionButtonSecondary} onPress={() => router.push('/garbagecollector/notifications' as any)}>
-        <Text style={styles.actionButtonSecondaryText}>Notifications</Text>
-      </Pressable>
-      <Pressable style={styles.actionButtonSecondary} onPress={() => router.push('/garbagecollector/activity-logs' as any)}>
-        <Text style={styles.actionButtonSecondaryText}>Activity Logs</Text>
-      </Pressable>
-      <Pressable style={styles.actionButtonSecondary} onPress={() => router.push('/garbagecollector/reports' as any)}>
-        <Text style={styles.actionButtonSecondaryText}>Summary Reports</Text>
-      </Pressable>
-
-      <Pressable style={styles.logoutButton} onPress={() => router.push('/garbagecollector/logout' as any)}>
-        <Text style={styles.logoutButtonText}>LOGOUT</Text>
-      </Pressable>
     </ScrollView>
   );
 }
@@ -151,29 +137,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 16,
-  },
-  actionButtonSecondary: {
-    backgroundColor: '#E8F7E9',
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  actionButtonSecondaryText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  logoutButton: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  logoutButtonText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-    fontSize: 15,
   },
 });

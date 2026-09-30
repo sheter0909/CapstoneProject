@@ -53,7 +53,7 @@ export default function GarbageCollectorReportsScreen() {
             </View>
             {reports.map((item) => (
               <View key={item._id} style={styles.reportCard}>
-                <Text style={styles.reportLabel}>{item._id.replace('_', ' ').toUpperCase()} Waste</Text>
+                <Text style={styles.reportLabel}>{item._id === 'mixed' ? 'MIXED (NOT SEGREGATED)' : `${item._id.replace('_', ' ').toUpperCase()}`} Waste</Text>
                 <Text style={styles.reportValue}>{Number(item.totalKg).toFixed(1)} kg ({item.entries} entries)</Text>
               </View>
             ))}

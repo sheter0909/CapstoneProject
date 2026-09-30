@@ -135,6 +135,12 @@ function formatExportDate(iso: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatWasteType(raw: string): string {
+  if (raw === 'mixed') return 'Mixed (Not Segregated)';
+  if (raw === 'non_biodegradable') return 'Non-biodegradable';
+  return raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, ' ');
+}
+
 function headerBlock(title: string, periodLabel: string, totalRecords: number): (string | number)[][] {
   return [
     [title],
@@ -194,7 +200,7 @@ export function exportDetailedReport(
         formatExportDate(row.collectionDate),
         row.weightKg,
         row.segregationStatus,
-        row.wasteType,
+        formatWasteType(row.wasteType),
         row.collector,
         row.remarks,
       ]),

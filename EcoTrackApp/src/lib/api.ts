@@ -37,15 +37,29 @@ export type CollectorUser = {
   status?: 'active' | 'inactive' | 'archived';
 };
 
+export type CollectionWarning = {
+  level: string;
+  count: number;
+};
+
 export type CollectionHistoryItem = {
   id: string;
   householdId: string;
   collectorId: string;
   segregationStatus: 'segregated' | 'not_segregated';
-  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable';
+  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable' | 'mixed';
   weightKg: number | string;
   timestamp: string;
   editedAt?: string | null;
+  warning?: CollectionWarning | null;
+  warningRemoved?: boolean;
+};
+
+export type HouseholdSummary = {
+  household: HouseholdUser | null;
+  history: CollectionHistoryItem[];
+  notSegregatedCount: number;
+  nextWarningLevel: string;
 };
 
 export type NotificationItem = {
@@ -178,13 +192,13 @@ export const collectorApi = {
       body: JSON.stringify({ resetToken, password }),
     }),
   householdSummary: (id: string) =>
-    apiRequest<{ household: HouseholdUser | null; history: CollectionHistoryItem[] }>(
+    apiRequest<HouseholdSummary>(
       `/households/${encodeURIComponent(id)}/summary`
     ),
   submitCollection: (body: unknown) =>
-    apiRequest<unknown>('/collections', { method: 'POST', body: JSON.stringify(body) }),
+    apiRequest<CollectionHistoryItem>('/collections', { method: 'POST', body: JSON.stringify(body) }),
   updateCollection: (id: string, body: unknown) =>
-    apiRequest<unknown>(`/collections/${encodeURIComponent(id)}`, {
+    apiRequest<CollectionHistoryItem>(`/collections/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),

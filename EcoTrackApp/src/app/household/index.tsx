@@ -119,7 +119,7 @@ export default function HouseholdHomeScreen() {
                 {new Date(latestHistory.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
               </Text>
               <Text style={styles.historyMeta}>
-                {latestHistory.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'} · {latestHistory.wasteType}
+                {latestHistory.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'} · {latestHistory.wasteType === 'mixed' ? 'Mixed' : latestHistory.wasteType}
               </Text>
             </View>
             <View style={styles.historyBadge}>

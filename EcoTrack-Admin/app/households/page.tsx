@@ -863,7 +863,7 @@ export default function HouseholdsPage() {
         actions={[{ label: 'Close', onClick: () => setShowHistoryModal(false) }]}
       >
         <div className="mt-4">
-          {collectionHistory.length === 0 ? <p className="text-sm text-gray-600">No historical records available.</p> : <div className="space-y-3">{collectionHistory.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 text-sm"><span>{new Date(entry.timestamp).toLocaleString()} · {entry.wasteType} · {String(entry.weightKg)} kg</span>{entry.editedAt ? <span className="font-semibold text-amber-700">(edited)</span> : null}</div>)}</div>}
+          {collectionHistory.length === 0 ? <p className="text-sm text-gray-600">No historical records available.</p> : <div className="space-y-3">{collectionHistory.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 text-sm"><span>{new Date(entry.timestamp).toLocaleString()} · {entry.wasteType === 'mixed' ? 'Mixed (Not Segregated)' : entry.wasteType} · {String(entry.weightKg)} kg</span>{entry.editedAt ? <span className="font-semibold text-amber-700">(edited)</span> : null}</div>)}</div>}
         </div>
       </Modal>
 

@@ -757,7 +757,7 @@ export default function GarbageCollectorsPage() {
                       <div className="text-xs text-gray-500">{record.householdId}</div>
                     </td>
                     <td className="px-3 py-2 text-gray-600">{record.householdPurok || '—'}</td>
-                    <td className="px-3 py-2 capitalize text-gray-600">{record.wasteType.replace(/_/g, ' ')}</td>
+                    <td className="px-3 py-2 capitalize text-gray-600">{record.wasteType === 'mixed' ? 'Mixed (Not Segregated)' : record.wasteType.replace(/_/g, ' ')}</td>
                     <td className="px-3 py-2 text-gray-600">{record.weightKg} kg</td>
                     <td className="px-3 py-2">
                       <span

@@ -83,6 +83,7 @@ function toWasteTypeLabel(raw: string): string {
   if (raw === 'biodegradable') return 'Biodegradable';
   if (raw === 'recyclable') return 'Recyclable';
   if (raw === 'non_biodegradable' || raw === 'non-biodegradable') return 'Non-biodegradable';
+  if (raw === 'mixed') return 'Mixed (Not Segregated)';
   return raw;
 }
 
@@ -185,6 +186,7 @@ function toWasteLabel(raw: string): string {
   if (raw === 'biodegradable') return 'Biodegradable';
   if (raw === 'recyclable') return 'Recyclable';
   if (raw === 'non_biodegradable') return 'Non-biodegradable';
+  if (raw === 'mixed') return 'Mixed (Not Segregated)';
   return raw;
 }
 
@@ -313,9 +315,18 @@ export default function ReportsPage() {
       from = new Date(selectedYear, 0, 1).toISOString();
       to = new Date(selectedYear + 1, 0, 1).toISOString();
     }
-    const params = `?limit=1000&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    const result = await adminApi.allCollections(params);
-    return result.items ?? [];
+    const baseParams = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    const allItems: CollectionAdminRecord[] = [];
+    let page = 1;
+    for (;;) {
+      const result = await adminApi.allCollections(`?limit=100&page=${page}&${baseParams}`);
+      const items = result.items ?? [];
+      allItems.push(...items);
+      const totalPages = result.totalPages ?? 1;
+      if (page >= totalPages || items.length === 0) break;
+      page += 1;
+    }
+    return allItems;
   };
 
   const handleExport = async () => {

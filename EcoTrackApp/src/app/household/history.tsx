@@ -4,6 +4,7 @@ import CollectionHistory, { HistoryRow } from '@/components/collection-history';
 import { CollectionHistoryItem, householdApi } from '@/lib/api';
 
 function wasteLabel(w: string) {
+  if (w === 'mixed') return 'Mixed';
   if (w === 'non_biodegradable') return 'Non-bio';
   return w.charAt(0).toUpperCase() + w.slice(1);
 }

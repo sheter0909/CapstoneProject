@@ -6,6 +6,7 @@ import { CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
 
 function toWasteTypeLabel(raw: CollectionHistoryItem['wasteType']): string {
+  if (raw === 'mixed') return 'Mixed';
   if (raw === 'non_biodegradable') return 'Non-biodegradable';
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
@@ -17,6 +18,8 @@ export default function GarbageCollectorScanResultsScreen() {
 
   const [household, setHousehold] = useState<HouseholdUser | null>(null);
   const [history, setHistory] = useState<CollectionHistoryItem[]>([]);
+  const [notSegregatedCount, setNotSegregatedCount] = useState(0);
+  const [nextWarningLevel, setNextWarningLevel] = useState('a warning');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -28,6 +31,8 @@ export default function GarbageCollectorScanResultsScreen() {
         if (isMounted) {
           setHousehold(data.household);
           setHistory(data.history ?? []);
+          setNotSegregatedCount(data.notSegregatedCount ?? 0);
+          setNextWarningLevel(data.nextWarningLevel?.trim() ? data.nextWarningLevel : 'a warning');
         }
       })
       .catch((err) => {
@@ -80,6 +85,10 @@ export default function GarbageCollectorScanResultsScreen() {
                 <Text style={styles.summaryLabel}>Last Visit</Text>
                 <Text style={styles.summaryValue}>{lastVisit}</Text>
               </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Not Segregated</Text>
+                <Text style={styles.summaryValue}>{notSegregatedCount}</Text>
+              </View>
             </View>
 
             <View style={styles.historyCard}>
@@ -99,7 +108,7 @@ export default function GarbageCollectorScanResultsScreen() {
             <Pressable
               style={styles.primaryButton}
               onPress={() => {
-                const navParams: Record<string, string> = { householdId: household?.householdId || targetId };
+                const navParams: Record<string, string> = { householdId: household?.householdId || targetId, nextWarningLevel };
                 const mostRecent = history[0];
                 if (mostRecent && Date.now() - new Date(mostRecent.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000) {
                   navParams.entryId = mostRecent.id;

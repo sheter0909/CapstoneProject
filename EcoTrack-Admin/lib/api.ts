@@ -38,7 +38,7 @@ export interface CollectorCollectionRecord {
   householdId: string;
   collectorId: string;
   segregationStatus: 'segregated' | 'not_segregated';
-  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable';
+  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable' | 'mixed';
   weightKg: number;
   timestamp: string;
   editedAt?: string | null;
@@ -86,7 +86,7 @@ export interface CollectionAdminRecord {
   householdId: string;
   collectorId: string;
   segregationStatus: 'segregated' | 'not_segregated';
-  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable';
+  wasteType: 'biodegradable' | 'recyclable' | 'non_biodegradable' | 'mixed';
   weightKg: number;
   timestamp: string;
   editedAt?: string | null;

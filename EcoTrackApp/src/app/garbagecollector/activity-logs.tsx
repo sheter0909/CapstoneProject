@@ -37,16 +37,17 @@ export default function GarbageCollectorActivityLogsScreen() {
         const d = new Date(e.timestamp);
         const timeLabel = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
         const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        const wasteLabel = e.wasteType === 'mixed' ? 'Mixed' : e.wasteType;
         return {
           id: e.id,
           timestamp: e.timestamp,
           timeLabel,
           title: 'Household Collected',
-          subtitle: `Household ${e.householdId} · ${e.wasteType} · ${String(e.weightKg)} kg`,
+          subtitle: `Household ${e.householdId} · ${wasteLabel} · ${String(e.weightKg)} kg`,
           tag: 'Done',
           tagTone: 'green',
           statusKey: 'Done',
-          searchText: `household collected ${e.householdId} ${e.wasteType} done ${dateStr} ${d.toLocaleDateString()}`,
+          searchText: `household collected ${e.householdId} ${wasteLabel} ${e.wasteType} done ${dateStr} ${d.toLocaleDateString()}`,
         };
       }),
     [entries]

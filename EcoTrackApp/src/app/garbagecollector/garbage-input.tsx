@@ -9,13 +9,22 @@ const wasteTypes = ['Biodegradable', 'Recyclable', 'Non-biodegradable'];
 
 export default function GarbageCollectorGarbageInputScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ entryId?: string; householdId?: string; segregated?: string; wasteType?: string; weight?: string }>();
+  const params = useLocalSearchParams<{ entryId?: string; householdId?: string; segregated?: string; wasteType?: string; weight?: string; nextWarningLevel?: string }>();
   const editing = Boolean(params.entryId);
-  const [segregated, setSegregated] = useState<'segregated' | 'not-segregated' | null>(params.segregated === 'not-segregated' ? 'not-segregated' : params.segregated === 'segregated' ? 'segregated' : null);
-  const [wasteType, setWasteType] = useState(params.wasteType ?? 'Biodegradable');
+  const nextWarningLabel = params.nextWarningLevel?.trim() ? params.nextWarningLevel.trim() : 'a warning';
+  const initialSegregated = params.segregated === 'not-segregated' ? 'not-segregated' : params.segregated === 'segregated' ? 'segregated' : null;
+  const initialWasteType = initialSegregated === 'segregated' && params.wasteType && params.wasteType.toLowerCase() !== 'mixed' ? params.wasteType : '';
+  const [segregated, setSegregated] = useState<'segregated' | 'not-segregated' | null>(initialSegregated);
+  const [wasteType, setWasteType] = useState(initialWasteType);
   const [weight, setWeight] = useState(params.weight ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const selectSegregated = (value: 'segregated' | 'not-segregated') => {
+    setSegregated(value);
+    setWasteType('');
+    setError('');
+  };
 
   const submit = async () => {
     setError('');
@@ -25,9 +34,10 @@ export default function GarbageCollectorGarbageInputScreen() {
     if (!weight || !Number.isFinite(numericWeight) || numericWeight < 0 || numericWeight > 15) return setError('Weight must be between 0 and 15 kg.');
     setSaving(true);
     try {
-      const body = { householdId: String(params.householdId ?? '0123'), segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', wasteType: wasteType.toLowerCase().replace('-', '_').replace('non_biodegradable', 'non_biodegradable'), weightKg: numericWeight };
-      const entry: any = editing ? await collectorApi.updateCollection(String(params.entryId), body) : await collectorApi.submitCollection(body);
-      router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType, weight: String(numericWeight), edited: editing ? 'true' : 'false' } });
+      const body: { householdId: string; segregationStatus: string; weightKg: number; wasteType?: string } = { householdId: String(params.householdId ?? '0123'), segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', weightKg: numericWeight };
+      if (segregated === 'segregated') body.wasteType = wasteType.toLowerCase().replace('-', '_');
+      const entry = editing ? await collectorApi.updateCollection(String(params.entryId), body) : await collectorApi.submitCollection(body);
+      router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '' } });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to save this entry.'); } finally { setSaving(false); }
   };
 
@@ -40,13 +50,13 @@ export default function GarbageCollectorGarbageInputScreen() {
         <View style={styles.toggleRow}>
           <Pressable
             style={[styles.statusButton, segregated === 'segregated' && styles.statusButtonActive]}
-            onPress={() => setSegregated('segregated')}
+            onPress={() => selectSegregated('segregated')}
           >
             <Text style={[styles.statusButtonText, segregated === 'segregated' && styles.statusButtonTextActive]}>Segregated</Text>
           </Pressable>
           <Pressable
             style={[styles.statusButton, segregated === 'not-segregated' && styles.statusButtonActiveRed]}
-            onPress={() => setSegregated('not-segregated')}
+            onPress={() => selectSegregated('not-segregated')}
           >
             <Text style={[styles.statusButtonText, segregated === 'not-segregated' && styles.statusButtonTextRed]}>Not Segregated</Text>
           </Pressable>
@@ -72,6 +82,26 @@ export default function GarbageCollectorGarbageInputScreen() {
               keyboardType="numeric"
               style={styles.input}
             />
+          </View>
+        )}
+
+        {segregated === 'not-segregated' && (
+          <View style={styles.inputCard}>
+            <Text style={styles.fieldLabel}>Weight</Text>
+            <TextInput
+              value={weight}
+              onChangeText={setWeight}
+              placeholder="Enter kg (max 15)"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+              style={styles.input}
+            />
+          </View>
+        )}
+
+        {segregated === 'not-segregated' && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningText}>This household will receive {nextWarningLabel.startsWith('a ') || nextWarningLabel.startsWith('A ') ? nextWarningLabel : `a ${nextWarningLabel}`}.</Text>
           </View>
         )}
 
@@ -199,6 +229,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   errorText: {
+    color: '#A12727',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  warningBox: {
+    backgroundColor: '#FDECEC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F3B4B4',
+  },
+  warningText: {
     color: '#A12727',
     fontWeight: '700',
     textAlign: 'center',

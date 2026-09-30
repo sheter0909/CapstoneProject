@@ -31,6 +31,7 @@ enum WasteType {
   biodegradable
   recyclable
   non_biodegradable
+  mixed
 }
 
 enum ActivityStatus {
@@ -107,12 +108,14 @@ model Notification {
   message       String
   level         String   @default("Level 1 Reminder")
   read          Boolean  @default(false)
+  collectionEntryId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@index([householdId])
   @@index([collectorId])
   @@index([recipientType])
+  @@index([collectionEntryId])
 }
 
 model ActivityLog {
