@@ -28,6 +28,7 @@ build/
 
 # Logs & temp
 *.log
+*.NEXT_PUBLIC_API_URL
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
