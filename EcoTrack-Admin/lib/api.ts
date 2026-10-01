@@ -2,8 +2,8 @@ const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'https://capstonepro
 const API_URL = configuredApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? configuredApiUrl.replace(/\/+$/, '')
   : `${configuredApiUrl.replace(/\/+$/, '')}/api`;
-const REQUEST_TIMEOUT_MS = 90_000;
-const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+const REQUEST_TIMEOUT_MS = 10_000;
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 const MAX_RETRIES = RETRY_DELAYS_MS.length;
 const CONNECT_ERROR_STATUS = 503;
 
@@ -134,7 +134,7 @@ async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
     });
   } catch {
-    throw new ApiError('Unable to reach the server. Please check your internet connection and try again.', CONNECT_ERROR_STATUS);
+    throw new ApiError(`Unable to reach the server at ${API_URL}. Please make sure the backend is running and try again.`, CONNECT_ERROR_STATUS);
   } finally {
     clearTimeout(timeout);
   }
@@ -177,7 +177,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       if (attempt >= MAX_RETRIES) {
         setConnectingState(idleState());
         throw new ApiError(
-          "We couldn't reach the server after several attempts. Please check your internet connection and try again.",
+          `We couldn't reach the server at ${API_URL} after several attempts. Please make sure the backend is running and try again.`,
           CONNECT_ERROR_STATUS,
         );
       }

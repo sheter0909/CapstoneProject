@@ -12,7 +12,7 @@ function logApiBaseOnce() {
     console.warn(`[EcoTrack] API base URL resolved to: ${API_URL}`);
   }
 }
-const REQUEST_TIMEOUT_MS = 90_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown };
 
@@ -116,7 +116,7 @@ export type SendNotificationBody = {
   level?: string;
 };
 
-const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+const RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

@@ -7,17 +7,41 @@ import { handleError } from './middleware.js';
 import { router } from './routes.js';
 
 const app = express();
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowed = config.corsOrigins;
-    if (allowed.includes('*') || !origin || allowed.includes(origin)) {
-      callback(null, allowed.includes('*') || !origin ? true : origin);
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, '').toLowerCase();
+}
+// Auto-allowed patterns: any eco-track.online subdomain, Vercel deploys, local dev.
+const AUTO_ALLOW_PATTERNS: RegExp[] = [
+  /^https:\/\/([a-z0-9-]+\.)*eco-track\.online$/,
+  /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/,
+  /^http:\/\/localhost(:\d+)?$/,
+  /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+];
+function isOriginAllowed(origin: string): boolean {
+  const allowed = config.corsOrigins.map(normalizeOrigin);
+  if (allowed.includes('*')) return true;
+  const normalized = normalizeOrigin(origin);
+  if (allowed.includes(normalized)) return true;
+  return AUTO_ALLOW_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (isOriginAllowed(origin)) {
+      callback(null, origin);
     } else {
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
+      console.error(`Blocked CORS origin: ${origin} (allowed: ${config.corsOrigins.join(', ')})`);
+      callback(null, false);
     }
   },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 const commit = (process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7);
