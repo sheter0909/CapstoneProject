@@ -161,6 +161,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     // Client errors (4xx) are final — do not retry.
     if (response.status >= 400 && response.status < 500) {
       const message = fieldErrors?.[0]?.message ?? payload?.message ?? `API request failed (${response.status} ${method} ${API_URL}${path})`;
+      if (response.status === 401) unauthorizedHandler?.();
       throw new ApiError(message, response.status, fieldErrors);
     }
 
@@ -189,6 +190,12 @@ let token: string | null = null;
 export function setApiToken(value: string | null) { token = value; }
 export function getApiToken() { return token; }
 function authHeader(): Record<string, string> { return token ? { Authorization: `Bearer ${token}` } : {}; }
+
+// Central 401 hook: the auth context registers a logout here so an expired or
+// revoked token can't leave the app in a fake-authenticated state (every
+// subsequent call would 401 while the guards still pass).
+let unauthorizedHandler: (() => void) | null = null;
+export function onUnauthorized(handler: (() => void) | null) { unauthorizedHandler = handler; }
 
 export const householdApi = {
   login: (identifier: string, password: string) =>

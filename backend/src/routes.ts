@@ -4,7 +4,7 @@ import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcrypt';
 import { prisma } from './db.js';
-import { hashPassword, login, encryptPasswordDisplay, decryptPasswordDisplay } from './auth.js';
+import { hashPassword, login, encryptPasswordDisplay } from './auth.js';
 import { created, fail, ok } from './response.js';
 import { requireAuth, validateRequest } from './middleware.js';
 import { accountFields, collectionFields, collectorFields, idParam, login as loginFields, notificationFields, pagination, password } from './validators.js';
@@ -14,12 +14,21 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHea
 const resetTokens = new Map<string, { role: 'household' | 'collector'; accountId: string; expires: number }>();
 type ActivityStatusValue = 'success' | 'pending' | 'failed';
 
-function paged(req: Request) { return { page: Number(req.query.page ?? 1), limit: Number(req.query.limit ?? 20) }; }
+function paged(req: Request) {
+  // Clamp invalid input: ?page=abc previously produced skip:NaN -> Prisma throw -> HTTP 500.
+  const rawPage = Number(req.query.page ?? 1);
+  const rawLimit = Number(req.query.limit ?? 20);
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.floor(rawPage)) : 1;
+  const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 20;
+  return { page, limit };
+}
 async function list(delegate: any, req: Request, where: Record<string, unknown> = {}) { const { page, limit } = paged(req); const [items, total] = await Promise.all([delegate.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }), delegate.count({ where })]); return { items, total, page, totalPages: Math.ceil(total / limit) }; }
 async function logActivity(user: string, activityType: string, description: string, status: ActivityStatusValue = 'success') { await prisma.activityLog.create({ data: { user, activityType, description, status } }); }
 function publicAccount(account: any) { const { password: _password, passwordDisplay: _pd, ...safeAccount } = account; return safeAccount; }
-function adminHousehold(account: any) { if (!account) return null; const { password: _password, passwordDisplay, ...rest } = account; return { ...rest, password: decryptPasswordDisplay(passwordDisplay) }; }
-function adminCollector(account: any) { if (!account) return null; const { password: _password, passwordDisplay, ...rest } = account; return { ...rest, password: decryptPasswordDisplay(passwordDisplay) }; }
+// Admin views no longer receive reversible plaintext passwords. The stored
+// passwordDisplay column is write-only now; admins rotate via update instead.
+function adminHousehold(account: any) { return publicAccount(account); }
+function adminCollector(account: any) { return publicAccount(account); }
 // Informational only: how many Warning-level notifications a household has received.
 async function violationCounts(householdIds: string[]): Promise<Record<string, number>> {
   if (householdIds.length === 0) return {};
@@ -73,7 +82,7 @@ export function normalizeDateString(d: string | null | undefined): string | null
   return trimmed;
 }
 
-for (const role of ['admin', 'household', 'collector'] as const) router.post(`/auth/${role}/login`, authLimiter, loginFields, validateRequest, async (req, res, next) => { try { const result = await login(role, String(req.body.identifier), String(req.body.password)); if ('error' in result) return fail(res, 401, result.error ?? 'Invalid credentials.'); return ok(res, result, 'Login successful.'); } catch (error) { next(error); } });
+for (const role of ['admin', 'household', 'collector'] as const) router.post(`/auth/${role}/login`, authLimiter, loginFields, validateRequest, async (req, res, next) => { try { const result = await login(role, String(req.body.identifier), String(req.body.password)); if ('error' in result) return fail(res, 'forbidden' in result && result.forbidden ? 403 : 401, result.error ?? 'Invalid credentials.'); return ok(res, result, 'Login successful.'); } catch (error) { next(error); } });
 
 for (const role of ['household', 'collector'] as const) {
   router.post(`/auth/${role}/forgot-password`, authLimiter, [body('identifier').trim().notEmpty().withMessage('Account ID is required.'), body('birthdate').trim().notEmpty().withMessage('Birthdate is required.'), validateRequest], async (req, res, next) => {
@@ -103,15 +112,21 @@ for (const role of ['household', 'collector'] as const) {
     }
   });
 
-  router.post(`/auth/${role}/reset-password`, [body('resetToken').notEmpty().withMessage('Reset token is required.'), password, validateRequest], async (req, res, next) => {
+  router.post(`/auth/${role}/reset-password`, authLimiter, [body('resetToken').notEmpty().withMessage('Reset token is required.'), password, validateRequest], async (req, res, next) => {
     try {
-      const reset = resetTokens.get(req.body.resetToken);
-      if (!reset || reset.role !== role || reset.expires < Date.now()) return fail(res, 401, 'Reset token is invalid or expired.');
+      const reset = resetTokens.get(String(req.body.resetToken ?? '').trim());
+      if (!reset || reset.role !== role || reset.expires < Date.now()) {
+        if (reset && reset.expires < Date.now()) resetTokens.delete(String(req.body.resetToken ?? '').trim());
+        return fail(res, 400, 'Reset token is invalid or expired.');
+      }
       const delegate: any = role === 'household' ? prisma.household : prisma.garbageCollector;
       const account = await delegate.findFirst({ where: role === 'household' ? { householdId: reset.accountId } : { collectorId: reset.accountId } });
       if (!account) return fail(res, 404, 'Account not found.');
       await delegate.update({ where: { id: account.id }, data: { password: await hashPassword(req.body.password) } });
-      resetTokens.delete(req.body.resetToken);
+      // Invalidate all outstanding reset tokens for this account, not just the used one.
+      for (const [token, entry] of resetTokens) {
+        if (entry.role === role && entry.accountId === reset.accountId) resetTokens.delete(token);
+      }
       return ok(res, null, 'Password reset successfully.');
     } catch (error) {
       next(error);
@@ -119,7 +134,7 @@ for (const role of ['household', 'collector'] as const) {
   });
 }
 
-router.post('/auth/collector/change-password', requireAuth('collector'), [body('currentPassword').notEmpty().withMessage('Current password is required.'), body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters.')], validateRequest, async (req, res, next) => {
+router.post('/auth/collector/change-password', requireAuth('collector'), authLimiter, [body('currentPassword').notEmpty().withMessage('Current password is required.'), body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters.')], validateRequest, async (req, res, next) => {
   try {
     const account = await prisma.garbageCollector.findUnique({ where: { collectorId: req.user!.id } });
     if (!account || !(await bcrypt.compare(req.body.currentPassword, account.password))) return fail(res, 401, 'Current password is incorrect.');
@@ -149,7 +164,8 @@ router.get('/households/me/history', requireAuth('household'), async (req, res, 
 router.get('/households/me/notifications', requireAuth('household'), async (req, res, next) => { try { const me = req.user!.id; return ok(res, await prisma.notification.findMany({ where: { OR: [{ householdId: me }, { recipientType: 'all-households' }, { senderId: me, senderRole: 'household' }] }, orderBy: { createdAt: 'desc' } })); } catch (error) { next(error); } });
 router.get('/households/:id', requireAuth('admin'), idParam, validateRequest, async (req, res, next) => {
   try {
-    const household = await prisma.household.findUnique({ where: { id: String(req.params.id) } });
+    const key = String(req.params.id);
+    const household = await prisma.household.findFirst({ where: { OR: [{ id: key }, { householdId: key }] } });
     if (!household) return fail(res, 404, 'Household not found.');
     const counts = await violationCounts([household.householdId]);
     return ok(res, { ...adminHousehold(household), violationCount: counts[household.householdId] ?? 0 });
@@ -182,18 +198,30 @@ router.post('/households', requireAuth('admin'), [...accountFields, password, va
 });
 router.put('/households/:id', requireAuth('admin'), [idParam, ...accountFields, validateRequest], async (req, res, next) => {
   try {
+    const id = String(req.params.id);
+    const existingRecord = await prisma.household.findUnique({ where: { id } });
+    if (!existingRecord) return fail(res, 404, 'Household not found.');
+    if (req.body.householdId && req.body.householdId !== existingRecord.householdId) {
+      const conflict = await prisma.household.findUnique({ where: { householdId: req.body.householdId } });
+      if (conflict) {
+        return fail(res, 409, 'Household ID already exists.', [{ field: 'householdId', message: 'This Household ID is already in use.' }]);
+      }
+    }
     const data: any = {
       householdId: req.body.householdId,
       fullName: req.body.fullName,
-      birthdate: normalizeDateString(req.body.birthdate),
       purok: req.body.purok,
       address: req.body.address || req.body.purok,
     };
+    if (req.body.birthdate !== undefined) data.birthdate = normalizeDateString(req.body.birthdate);
     if (req.body.password) {
+      if (String(req.body.password).length < 8) {
+        return fail(res, 422, 'Validation failed.', [{ field: 'password', message: 'Password must be at least 8 characters.' }]);
+      }
       data.password = await hashPassword(req.body.password);
       data.passwordDisplay = encryptPasswordDisplay(req.body.password);
     }
-    const household = await prisma.household.update({ where: { id: String(req.params.id) }, data });
+    const household = await prisma.household.update({ where: { id }, data });
     await logActivity(req.user!.name ?? 'Admin', 'Household Updated', `Updated household ${household.householdId}`);
     return ok(res, adminHousehold(household));
   } catch (error) {
@@ -222,7 +250,7 @@ router.get('/collectors/:id', requireAuth('admin'), idParam, validateRequest, as
 });
 router.post('/collectors', requireAuth('admin'), [...collectorFields, password, validateRequest], async (req, res, next) => {
   try {
-    const collectorId = req.body.collectorId ?? await nextCollectorId();
+    const collectorId = req.body.collectorId ? String(req.body.collectorId).trim().toUpperCase() : await nextCollectorId();
     const existing = await prisma.garbageCollector.findUnique({ where: { collectorId } });
     if (existing) {
       return fail(res, 409, 'Collector ID already exists.', [{ field: 'collectorId', message: 'This Collector ID is already in use.' }]);
@@ -246,18 +274,32 @@ router.post('/collectors', requireAuth('admin'), [...collectorFields, password, 
 });
 router.put('/collectors/:id', requireAuth('admin'), [idParam, ...collectorFields, validateRequest], async (req, res, next) => {
   try {
+    const id = String(req.params.id);
+    const existingRecord = await prisma.garbageCollector.findUnique({ where: { id } });
+    if (!existingRecord) return fail(res, 404, 'Collector not found.');
+    if (req.body.collectorId && req.body.collectorId !== existingRecord.collectorId) {
+      // Normalize like create (line ~246) and login (auth.ts): stored IDs are uppercase.
+      // Without this, saving "gc-0001" makes the next login (uppercased to "GC-0001") 404.
+      const conflict = await prisma.garbageCollector.findUnique({ where: { collectorId: String(req.body.collectorId).trim().toUpperCase() } });
+      if (conflict) {
+        return fail(res, 409, 'Collector ID already exists.', [{ field: 'collectorId', message: 'This Collector ID is already in use.' }]);
+      }
+    }
     const data: any = {
-      collectorId: req.body.collectorId,
+      collectorId: req.body.collectorId ? String(req.body.collectorId).trim().toUpperCase() : existingRecord.collectorId,
       fullName: req.body.fullName,
-      birthdate: normalizeDateString(req.body.birthdate),
       assignedArea: req.body.assignedArea,
       contactNumber: req.body.contactNumber || null,
     };
+    if (req.body.birthdate !== undefined) data.birthdate = normalizeDateString(req.body.birthdate);
     if (req.body.password) {
+      if (String(req.body.password).length < 8) {
+        return fail(res, 422, 'Validation failed.', [{ field: 'password', message: 'Password must be at least 8 characters.' }]);
+      }
       data.password = await hashPassword(req.body.password);
       data.passwordDisplay = encryptPasswordDisplay(req.body.password);
     }
-    const collector = await prisma.garbageCollector.update({ where: { id: String(req.params.id) }, data });
+    const collector = await prisma.garbageCollector.update({ where: { id }, data });
     await logActivity(req.user!.name ?? 'Admin', 'Collector Updated', `Updated garbage collector ${collector.collectorId}`);
     return ok(res, adminCollector(collector));
   } catch (error) {
@@ -267,9 +309,9 @@ router.put('/collectors/:id', requireAuth('admin'), [idParam, ...collectorFields
 router.patch('/collectors/:id/archive', requireAuth('admin'), idParam, validateRequest, async (req, res, next) => changeStatus(req, res, next, prisma.garbageCollector, 'archived', 'Collector Archived'));
 router.patch('/collectors/:id/unarchive', requireAuth('admin'), idParam, validateRequest, async (req, res, next) => changeStatus(req, res, next, prisma.garbageCollector, 'active', 'Collector Restored'));
 
-router.get('/archive/households', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { return ok(res, await list(prisma.household, req, { status: 'archived' })); } catch (error) { next(error); } });
-router.get('/archive/collectors', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { return ok(res, await list(prisma.garbageCollector, req, { status: 'archived' })); } catch (error) { next(error); } });
-router.get('/activity-logs', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { return ok(res, await list(prisma.activityLog, req, req.query.status && req.query.status !== 'all' ? { status: req.query.status } : {})); } catch (error) { next(error); } });
+router.get('/archive/households', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { const result = await list(prisma.household, req, { status: 'archived' }); return ok(res, { ...result, items: result.items.map((item: any) => publicAccount(item)) }); } catch (error) { next(error); } });
+router.get('/archive/collectors', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { const result = await list(prisma.garbageCollector, req, { status: 'archived' }); return ok(res, { ...result, items: result.items.map((item: any) => publicAccount(item)) }); } catch (error) { next(error); } });
+router.get('/activity-logs', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => { try { const status = String(req.query.status ?? 'all'); const where = status !== 'all' && ['success', 'pending', 'failed'].includes(status) ? { status } : {}; return ok(res, await list(prisma.activityLog, req, where)); } catch (error) { next(error); } });
 
 router.get('/dashboard/stats', requireAuth('admin'), async (_req, res, next) => { try { const [total, active, inactive, archived, pendingAlerts] = await Promise.all([prisma.household.count(), prisma.household.count({ where: { status: 'active' } }), prisma.household.count({ where: { status: 'inactive' } }), prisma.household.count({ where: { status: 'archived' } }), prisma.activityLog.count({ where: { status: 'pending' } })]); return ok(res, { totalHouseholds: total, activeHouseholds: active, inactiveHouseholds: inactive, archivedHouseholds: archived, dailyCollectionTarget: 0, recyclingParticipation: 0, pendingAlerts }); } catch (error) { next(error); } });
 router.get('/dashboard/recent-activity', requireAuth('admin'), async (req, res, next) => { try { return ok(res, await list(prisma.activityLog, req)); } catch (error) { next(error); } });
@@ -279,7 +321,12 @@ router.get('/reports/waste-type-distribution', requireAuth('admin'), async (_req
 router.get('/reports/monthly-performance', requireAuth('admin'), reportByPeriod('month'));
 
 router.get('/households/:id/summary', requireAuth('collector'), async (req, res, next) => { try { const householdId = String(req.params.id); const account = await prisma.household.findUnique({ where: { householdId } }); const notSegregatedCount = await prisma.collectionEntry.count({ where: { householdId, segregationStatus: 'not_segregated' } }); const summaryHistory = await prisma.collectionEntry.findMany({ where: { householdId }, orderBy: { timestamp: 'desc' }, take: 10 }); return ok(res, { household: account ? publicAccount(account) : null, history: summaryHistory.map((entry) => withEditable(entry, req.user!.id)), notSegregatedCount, nextWarningLevel: nextWarningLevelForCount(notSegregatedCount) }); } catch (error) { next(error); } });
-router.get('/households/:id/collections', requireAuth('admin'), async (req, res, next) => { try { return ok(res, await prisma.collectionEntry.findMany({ where: { householdId: String(req.params.id) }, orderBy: { timestamp: 'desc' } })); } catch (error) { next(error); } });
+router.get('/households/:id/collections', requireAuth('admin'), async (req, res, next) => { try {
+  const key = String(req.params.id);
+  const household = await prisma.household.findFirst({ where: { OR: [{ id: key }, { householdId: key }] } });
+  if (!household) return fail(res, 404, 'Household not found.');
+  return ok(res, await prisma.collectionEntry.findMany({ where: { householdId: household.householdId }, orderBy: { timestamp: 'desc' } }));
+} catch (error) { next(error); } });
 router.get('/collections', requireAuth('admin'), pagination, validateRequest, async (req, res, next) => {
   try {
     const { page, limit } = paged(req);
@@ -455,4 +502,6 @@ router.patch('/notifications/:id/read', requireAuth('admin', 'collector', 'house
 
 async function changeStatus(req: Request, res: Response, next: (error: unknown) => void, delegate: any, status: string, activityType: string) { try { const existing = await delegate.findUnique({ where: { id: req.params.id } }); if (!existing) return fail(res, 404, 'Record not found.'); const account = await delegate.update({ where: { id: req.params.id }, data: { status } }); await logActivity(req.user!.name ?? 'Admin', activityType, `${activityType}: ${account.fullName}`); return ok(res, publicAccount(account)); } catch (error) { next(error); } }
 async function nextCollectorId() { const collectors = await prisma.garbageCollector.findMany({ select: { collectorId: true } }); const latest = collectors.map(({ collectorId }) => Number(collectorId.match(/^GC-(\d+)$/)?.[1] ?? 0)).sort((a, b) => b - a)[0] ?? 0; return `GC-${String(latest + 1).padStart(4, '0')}`; }
-function reportByPeriod(period: 'day' | 'month') { return async (_req: Request, res: Response, next: (error: unknown) => void) => { try { const entries = await prisma.collectionEntry.findMany({ select: { timestamp: true, weightKg: true } }); const totals = new Map<string, number>(); for (const entry of entries) { const date = entry.timestamp.toISOString(); const key = period === 'day' ? date.slice(0, 10) : date.slice(0, 7); totals.set(key, (totals.get(key) ?? 0) + Number(entry.weightKg)); } return ok(res, [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([_id, totalKg]) => ({ _id, totalKg }))); } catch (error) { next(error); } }; }
+function reportByPeriod(period: 'day' | 'month') { return async (_req: Request, res: Response, next: (error: unknown) => void) => { try { const entries = await prisma.collectionEntry.findMany({ select: { timestamp: true, weightKg: true } }); const totals = new Map<string, number>(); for (const entry of entries) { // Bucket in Philippines time (UTC+8, no DST): toISOString() is UTC, so an evening
+      // collection in PH previously landed in the next UTC day/month bucket.
+      const phTime = new Date(entry.timestamp.getTime() + 8 * 60 * 60 * 1000); const date = phTime.toISOString(); const key = period === 'day' ? date.slice(0, 10) : date.slice(0, 7); totals.set(key, (totals.get(key) ?? 0) + Number(entry.weightKg)); } return ok(res, [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([_id, totalKg]) => ({ _id, totalKg }))); } catch (error) { next(error); } }; }

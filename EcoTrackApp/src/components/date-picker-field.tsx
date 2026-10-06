@@ -70,7 +70,8 @@ export function parseToIsoDate(dateStr: string): string {
   }
   const d = new Date(dateStr);
   if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0];
+    // Local calendar day: toISOString() is UTC and shifts PH dates back a day.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   return dateStr;
 }
@@ -99,8 +100,11 @@ export default function DatePickerField({
     }
   }
 
-  // Parse initial state or default to current date
-  const initialDate = value ? new Date(parseToIsoDate(value)) : new Date(2000, 0, 1);
+  // Parse initial state or default to current date.
+  // "YYYY-MM-DD" alone parses as UTC midnight; appending T00:00:00 keeps it local
+  // so getFullYear/getMonth/getDate never shift a day in any timezone.
+  const initialIso = value ? parseToIsoDate(value) : '';
+  const initialDate = initialIso ? new Date(`${initialIso}T00:00:00`) : new Date(2000, 0, 1);
   const validInitial = isNaN(initialDate.getTime()) ? new Date(2000, 0, 1) : initialDate;
 
   const [currentYear, setCurrentYear] = useState(validInitial.getFullYear());
@@ -152,7 +156,8 @@ export default function DatePickerField({
   };
 
   const openPicker = () => {
-    const cur = selectedIso ? new Date(selectedIso) : value ? new Date(parseToIsoDate(value)) : new Date(2000, 0, 1);
+    const iso = selectedIso || (value ? parseToIsoDate(value) : '');
+    const cur = iso ? new Date(`${iso}T00:00:00`) : new Date(2000, 0, 1);
     const valid = isNaN(cur.getTime()) ? new Date(2000, 0, 1) : cur;
     setCurrentYear(valid.getFullYear());
     setCurrentMonth(valid.getMonth());

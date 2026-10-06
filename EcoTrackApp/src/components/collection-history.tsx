@@ -30,7 +30,10 @@ function dateKey(iso: string): string {
 function sectionTitle(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
-  if (dateKey(iso) === dateKey(today.toISOString())) return 'Today';
+  // Compare local calendar days: today.toISOString() is UTC, which is still
+  // "yesterday" during 00:00-07:59 in the Philippines (UTC+8).
+  const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+  if (dateKey(iso) === todayKey) return 'Today';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 

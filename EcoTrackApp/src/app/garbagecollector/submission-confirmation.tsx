@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
@@ -6,7 +6,14 @@ import { Spacing } from '@/constants/theme';
 export default function SubmissionConfirmationScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ entryId: string; householdId: string; segregated: string; wasteType: string; weight: string; edited?: string; warningLevel?: string; warningRemoved?: string; editableUntil?: string }>();
-  const [nowMs] = useState(() => Date.now());
+  // Ticking clock (not a frozen mount timestamp): "Edit Entry" disappears if
+  // the edit window expires while this screen stays open.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!params.editableUntil) return;
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [params.editableUntil]);
   const editAllowed = Boolean(params.entryId) && (!params.editableUntil || nowMs < new Date(params.editableUntil).getTime());
   const warningLevel = params.warningLevel?.trim() ?? '';
   const warningRemoved = params.warningRemoved === 'true';

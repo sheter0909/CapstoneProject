@@ -195,6 +195,8 @@ export default function ReportsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [reportData, setReportData] = useState<ReportData>(INITIAL_REPORT);
+  const [dataStale, setDataStale] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [period, setPeriod] = useState<ReportPeriod>('weekly');
   const [selectedWeek, setSelectedWeek] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
@@ -225,9 +227,13 @@ export default function ReportsPage() {
     ])
       .then(([summary, weekly, distribution, monthly]) => {
         setReportData((current) => buildReportData(summary, weekly, distribution, monthly, current));
+        setDataStale(false);
       })
       .catch(() => {
-        // Keep the current (fallback) data when the backend is unavailable.
+        // Do NOT present the 2024 sample fallback as data: flag a hard load
+        // failure so charts/export are blocked until live data arrives.
+        setLoadFailed(true);
+        setDataStale(true);
       });
   }, []);
 
@@ -318,12 +324,13 @@ export default function ReportsPage() {
     const baseParams = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
     const allItems: CollectionAdminRecord[] = [];
     let page = 1;
+    const MAX_EXPORT_PAGES = 50;
     for (;;) {
       const result = await adminApi.allCollections(`?limit=100&page=${page}&${baseParams}`);
       const items = result.items ?? [];
       allItems.push(...items);
       const totalPages = result.totalPages ?? 1;
-      if (page >= totalPages || items.length === 0) break;
+      if (page >= totalPages || items.length === 0 || page >= MAX_EXPORT_PAGES) break;
       page += 1;
     }
     return allItems;
@@ -373,13 +380,25 @@ export default function ReportsPage() {
             </label>
             <button
               onClick={handleExport}
-              disabled={isExporting}
+              disabled={isExporting || loadFailed}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isExporting ? 'Preparing...' : 'Export to Excel'}
             </button>
           </div>
         </div>
+
+        {loadFailed ? (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            Could not load reports — the backend is unreachable. Start the backend and refresh; no figures are shown until live data loads.
+          </div>
+        ) : (
+          dataStale && (
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              Showing sample data — the backend is unreachable, so these figures are not live. Start the backend and refresh to load real reports.
+            </div>
+          )
+        )}
 
         {exportError && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -438,7 +457,9 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Key Metrics */}
+        {!loadFailed && (
+          <>
+            {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.totalHouseholds.toLocaleString()}</div>
@@ -542,6 +563,8 @@ export default function ReportsPage() {
             </table>
           </div>
         </div>
+          </>
+        )}
       </div>
     </main>
   );

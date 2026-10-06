@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { collectorApi, householdApi, CollectorUser, HouseholdUser, setApiToken } from '@/lib/api';
+import { collectorApi, householdApi, CollectorUser, HouseholdUser, onUnauthorized, setApiToken } from '@/lib/api';
 
 type AuthContextValue = {
   hydrated: boolean;
@@ -154,15 +154,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [householdResetToken]);
 
-  const logoutHousehold = () => {
+  const logoutHousehold = useCallback(() => {
     setHouseholdAuthenticated(false);
     setHouseholdUser(null);
     setApiToken(null);
-    Promise.all([
+    void Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
       AsyncStorage.removeItem(HOUSEHOLD_KEY),
-    ]);
-  };
+      AsyncStorage.removeItem(COLLECTOR_KEY),
+    ]).catch(() => undefined);
+  }, []);
 
   const loginCollector = async (collectorId: string, password: string) => {
     try {
@@ -177,6 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AsyncStorage.setItem(COLLECTOR_KEY, JSON.stringify(result.account)),
         AsyncStorage.removeItem(HOUSEHOLD_KEY),
       ]);
+      setCollectorUser(result.account);
       setCollectorAuthenticated(true);
       return { success: true };
     } catch (error) {
@@ -186,12 +188,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyCollectorIdentity = async (collectorId: string, birthdate: string) => {
     try {
-      const result = await collectorApi.forgotPassword(collectorId.trim(), birthdate);
+      const normalizedId = collectorId.trim().toUpperCase();
+      const result = await collectorApi.forgotPassword(normalizedId, birthdate.trim());
       setCollectorResetToken(result.resetToken);
-      setCollectorResetAccountId(collectorId.trim().toUpperCase());
+      setCollectorResetAccountId(normalizedId);
       setCollectorRecoveryVerified(true);
       return true;
     } catch {
+      setCollectorResetToken(null);
+      setCollectorResetAccountId(null);
       setCollectorRecoveryVerified(false);
       return false;
     }
@@ -210,15 +215,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [collectorResetToken]);
 
-  const logoutCollector = () => {
+  const logoutCollector = useCallback(() => {
     setCollectorAuthenticated(false);
     setCollectorUser(null);
     setApiToken(null);
-    Promise.all([
+    void Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
+      AsyncStorage.removeItem(HOUSEHOLD_KEY),
       AsyncStorage.removeItem(COLLECTOR_KEY),
-    ]);
-  };
+    ]).catch(() => undefined);
+  }, []);
+
+  // Any 401 from the API means the token is expired/revoked: drop both
+  // portals' sessions so the guards redirect to login instead of lingering.
+  useEffect(() => {
+    onUnauthorized(() => {
+      logoutHousehold();
+      logoutCollector();
+    });
+    return () => onUnauthorized(null);
+  }, [logoutHousehold, logoutCollector]);
 
   const value = useMemo(
     () => ({
@@ -250,11 +266,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       householdResetAccountId,
       resetHouseholdPassword,
       refreshHouseholdProfile,
+      logoutHousehold,
       collectorAuthenticated,
       collectorUser,
       collectorRecoveryVerified,
       collectorResetAccountId,
       resetCollectorPassword,
+      logoutCollector,
     ]
   );
 

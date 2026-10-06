@@ -78,17 +78,29 @@ export default function GarbageCollectorActivityLogsScreen() {
       onEdit={(row) => {
         const entry = entries.find((e) => e.id === row.id);
         if (!entry) return;
-        router.push({
-          pathname: '/garbagecollector/garbage-input' as any,
-          params: {
-            entryId: entry.id,
-            householdId: entry.householdId,
-            segregated: entry.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated',
-            wasteType: toWasteTypeLabel(entry.wasteType),
-            weight: String(entry.weightKg),
-            ...(entry.editableUntil ? { editableUntil: entry.editableUntil } : {}),
-          },
-        });
+        // Fetch the warning level like scan-results does: without it the edit
+        // screen falls back to "a warning" and the confirmation shows nothing.
+        collectorApi
+          .householdSummary(entry.householdId)
+          .catch(() => null)
+          .then((summary) => {
+            const level =
+              summary && typeof summary.nextWarningLevel === 'string' && summary.nextWarningLevel.trim()
+                ? summary.nextWarningLevel
+                : 'a warning';
+            router.push({
+              pathname: '/garbagecollector/garbage-input' as any,
+              params: {
+                entryId: entry.id,
+                householdId: entry.householdId,
+                segregated: entry.segregationStatus === 'segregated' ? 'segregated' : 'not-segregated',
+                wasteType: toWasteTypeLabel(entry.wasteType),
+                weight: String(entry.weightKg),
+                nextWarningLevel: level,
+                ...(entry.editableUntil ? { editableUntil: entry.editableUntil } : {}),
+              },
+            });
+          });
       }}
     />
   );

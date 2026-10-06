@@ -53,6 +53,8 @@ export default function GarbageCollectorsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const apiConnecting = useApiConnecting();
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     id: '',
     name: '',
@@ -68,7 +70,8 @@ export default function GarbageCollectorsPage() {
   const visibleCollectors = collectors.filter((collector) => collector.status !== 'archived');
 
   const filteredCollectors = visibleCollectors.filter((collector) => {
-    const query = (formData.id || '').trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return statusFilter === 'all' ? true : collector.status === statusFilter;
     const nameMatch = collector.name.toLowerCase().includes(query);
     const idMatch = collector.id.toLowerCase().includes(query);
     const zoneMatch = collector.zone.toLowerCase().includes(query);
@@ -117,9 +120,9 @@ export default function GarbageCollectorsPage() {
           status: account.status,
         }));
         setCollectors(accounts);
-        setSelectedCollector(accounts[0] ?? null);
+        setSelectedCollector((previous) => previous ?? accounts[0] ?? null);
       })
-      .catch(() => undefined)
+      .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Unable to load collectors.'))
       .finally(() => setIsLoading(false));
   }, [router, hasStoredSession]);
 
@@ -210,13 +213,14 @@ export default function GarbageCollectorsPage() {
     }
     const collectorWithoutPassword = { ...newCollector };
     delete collectorWithoutPassword.password;
-    const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, joinDate: account.joinDate, status: account.status };
+    // Keep the server record (including dbId): update/archive endpoints need the
+    // database id, and without dbId they fall back to the human ID and 404.
+    const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, dbId: account.id, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, joinDate: account.joinDate, status: account.status };
     const updatedCollectors = [...collectors.filter((collector) => collector.id !== idValue), savedCollector];
     setCollectors(updatedCollectors);
     setSelectedCollector(savedCollector);
 
     resetFormState();
-    setSelectedCollector(newCollector);
     setToastMessage('Garbage Collector added successfully');
     setTimeout(() => setToastMessage(null), 2200);
   };
@@ -558,8 +562,22 @@ export default function GarbageCollectorsPage() {
           <div className="lg:col-span-2">
             <div className="overflow-hidden rounded-[28px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
               <div className="border-b border-gray-100 p-6">
-                <h3 className="text-xl font-semibold text-gray-900">All Garbage Collectors ({visibleCollectors.length})</h3>
+                <h3 className="text-xl font-semibold text-gray-900">All Garbage Collectors ({filteredCollectors.length})</h3>
                 <p className="mt-1 text-sm text-gray-500">Select a collector to review the full profile.</p>
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by name, ID, or area..."
+                    className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100"
+                  />
+                </div>
+                {loadError && (
+                  <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {loadError}
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(['all','active','inactive'] as const).map((filter) => (
                     <button

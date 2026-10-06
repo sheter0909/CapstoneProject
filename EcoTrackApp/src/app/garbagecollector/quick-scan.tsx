@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -9,9 +9,10 @@ function extractHouseholdId(qrData: string): string | null {
   const normalized = qrData.trim();
   if (!normalized) return null;
   if (normalized.startsWith('household-')) {
-    const segments = normalized.split('-');
-    if (segments.length >= 2 && segments[1]) return segments[1];
-    return null;
+    // Strip the prefix instead of splitting on '-': an ID containing a dash
+    // (e.g. "household-0117-04") would otherwise be truncated to "0117".
+    const id = normalized.slice('household-'.length).trim();
+    return id ? id : null;
   }
   return normalized;
 }
@@ -22,6 +23,9 @@ export default function GarbageCollectorQuickScanScreen() {
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState('');
   const [permission, requestPermission] = useCameraPermissions();
+  // Synchronous lock: camera fires per-frame, state updates are async and a
+  // second scan event can slip through before `scanned` flips.
+  const navigatingRef = useRef(false);
 
   const navigateToResults = (targetId: string) => {
     router.push({
@@ -31,12 +35,13 @@ export default function GarbageCollectorQuickScanScreen() {
   };
 
   const handleBarcodeScanned = ({ data }: { data: string }) => {
-    if (scanned) return;
+    if (scanned || navigatingRef.current) return;
     const extracted = extractHouseholdId(data);
     if (!extracted) {
       setError('The scanned QR code is invalid. Please try again or enter the Household ID manually.');
       return;
     }
+    navigatingRef.current = true;
     setError('');
     setScanned(true);
     setHouseholdId(extracted);
@@ -59,6 +64,7 @@ export default function GarbageCollectorQuickScanScreen() {
   };
 
   const handleRescan = () => {
+    navigatingRef.current = false;
     setScanned(false);
     setHouseholdId('');
     setError('');

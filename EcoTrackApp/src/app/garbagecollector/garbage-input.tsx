@@ -33,11 +33,11 @@ export default function GarbageCollectorGarbageInputScreen() {
     if (!segregated) return setError('Choose Segregated or Not Segregated.');
     if (segregated === 'segregated' && !wasteType) return setError('Choose a waste type.');
     const numericWeight = Number(weight);
-    if (!weight || !Number.isFinite(numericWeight) || numericWeight < 0 || numericWeight > 15) return setError('Weight must be between 0 and 15 kg.');
+    if (!weight || !Number.isFinite(numericWeight) || numericWeight <= 0 || numericWeight > 15) return setError('Weight must be between 0 and 15 kg (greater than 0).');
     setSaving(true);
     try {
       const body: { householdId: string; segregationStatus: string; weightKg: number; wasteType?: string } = { householdId, segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', weightKg: numericWeight };
-      if (segregated === 'segregated') body.wasteType = wasteType.toLowerCase().replace('-', '_');
+      body.wasteType = segregated === 'segregated' ? wasteType.toLowerCase().replace(/-/g, '_') : 'mixed';
       const entry = editing ? await collectorApi.updateCollection(String(params.entryId), body) : await collectorApi.submitCollection(body);
       router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '', editableUntil: entry.editableUntil ?? params.editableUntil ?? '' } });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to save this entry.'); } finally { setSaving(false); }
@@ -122,7 +122,7 @@ export default function GarbageCollectorGarbageInputScreen() {
         )}
 
         <Pressable
-          style={[styles.primaryButton, !segregated && styles.primaryButtonDisabled]}
+          style={[styles.primaryButton, (!segregated || saving) && styles.primaryButtonDisabled]}
           onPress={submit}
           disabled={saving}
         >
