@@ -15,7 +15,7 @@ export type HistoryRow = {
   canEdit?: boolean;
 };
 
-export type HistorySection = { title: string; data: HistoryRow[] };
+type HistorySection = { title: string; data: HistoryRow[] };
 
 const NAVY = '#1B2A4A';
 const GRAY = '#6B7280';
@@ -37,7 +37,7 @@ function sectionTitle(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function groupByDate(rows: HistoryRow[]): HistorySection[] {
+function groupByDate(rows: HistoryRow[]): HistorySection[] {
   const map = new Map<string, HistoryRow[]>();
   const keyToIso = new Map<string, string>();
   for (const row of rows) {

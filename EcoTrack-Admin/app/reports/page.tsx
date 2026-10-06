@@ -182,14 +182,6 @@ function startOfWeek(dateStr: string): Date {
   return date;
 }
 
-function toWasteLabel(raw: string): string {
-  if (raw === 'biodegradable') return 'Biodegradable';
-  if (raw === 'recyclable') return 'Recyclable';
-  if (raw === 'non_biodegradable') return 'Non-biodegradable';
-  if (raw === 'mixed') return 'Mixed (Not Segregated)';
-  return raw;
-}
-
 export default function ReportsPage() {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
@@ -275,7 +267,7 @@ export default function ReportsPage() {
       collectionDate: entry.timestamp,
       weightKg: Number(entry.weightKg),
       segregationStatus: entry.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated',
-      wasteType: toWasteLabel(entry.wasteType),
+      wasteType: toWasteTypeLabel(entry.wasteType),
       collector: entry.collectorName,
       remarks: entry.editedAt ? 'Edited after submission' : '',
     }));

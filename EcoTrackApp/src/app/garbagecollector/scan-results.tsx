@@ -3,18 +3,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 import { CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
+import { toWasteTypeLabel } from '@/lib/labels';
 import { safeBack } from '@/lib/navigation';
-
-function toWasteTypeLabel(raw: CollectionHistoryItem['wasteType']): string {
-  if (raw === 'mixed') return 'Mixed';
-  if (raw === 'non_biodegradable') return 'Non-biodegradable';
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
 
 export default function GarbageCollectorScanResultsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ householdId?: string }>();
-  const targetId = params.householdId?.trim() ?? '';
+  const rawHouseholdId = Array.isArray(params.householdId) ? params.householdId[0] : params.householdId;
+  const targetId = rawHouseholdId?.trim() ?? '';
 
   const [household, setHousehold] = useState<HouseholdUser | null>(null);
   const [history, setHistory] = useState<CollectionHistoryItem[]>([]);

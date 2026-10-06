@@ -54,7 +54,7 @@ function buildWarningText(level: string, count: number, timestamp: Date, weightK
   return { title, message };
 }
 
-export function normalizeDateString(d: string | null | undefined): string | null {
+function normalizeDateString(d: string | null | undefined): string | null {
   if (!d) return null;
   const trimmed = String(d).trim();
   if (!trimmed) return null;

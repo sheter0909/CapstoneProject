@@ -3,12 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import CollectionHistory, { HistoryRow } from '@/components/collection-history';
 import { CollectionHistoryItem, collectorApi } from '@/lib/api';
-
-function toWasteTypeLabel(raw: string): string {
-  if (raw === 'mixed') return 'Mixed';
-  if (raw === 'non_biodegradable') return 'Non-biodegradable';
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
-}
+import { toWasteTypeLabel } from '@/lib/labels';
 
 export default function GarbageCollectorActivityLogsScreen() {
   const router = useRouter();

@@ -37,18 +37,6 @@ const toneStyles: Record<Tone, { ring: string; icon: string; value: string }> = 
   },
 };
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
-  return (
-    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h2 className="mb-2 text-3xl font-bold text-gray-800">{title}</h2>
-        {subtitle ? <p className="text-base text-gray-600">{subtitle}</p> : null}
-      </div>
-      {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
-    </div>
-  );
-}
-
 export function StatCard({
   label,
   value,
@@ -116,11 +104,5 @@ export function LoadingState({ label = 'Loading...' }: { label?: string }) {
       <span className="h-6 w-6 animate-spin rounded-full border-2 border-green-200 border-t-green-600" aria-hidden="true" />
       <p className="text-base text-gray-600">{label}</p>
     </div>
-  );
-}
-
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-[28px] border border-green-100 bg-white p-6 shadow-sm ${className}`}>{children}</div>
   );
 }

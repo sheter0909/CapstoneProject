@@ -47,7 +47,7 @@ export interface CollectorCollectionRecord {
   householdAddress: string;
 }
 
-export interface CollectorCollectionHistory {
+interface CollectorCollectionHistory {
   collector: { collectorId: string; fullName: string };
   collections: CollectorCollectionRecord[];
 }
@@ -70,7 +70,7 @@ export interface AdminNotification {
   updatedAt: string;
 }
 
-export interface ActivityLogRecord {
+interface ActivityLogRecord {
   id: string;
   user: string;
   activityType: string;

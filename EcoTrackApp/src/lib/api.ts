@@ -1,10 +1,6 @@
 const configuredApiUrl = (process.env.EXPO_PUBLIC_API_URL ?? 'https://capstoneproject-oksk.onrender.com/api').replace(/\/+$/, '');
 const API_URL = configuredApiUrl.endsWith('/api') ? configuredApiUrl : `${configuredApiUrl}/api`;
 
-export function getApiBaseUrl(): string {
-  return API_URL;
-}
-
 let apiBaseLogged = false;
 function logApiBaseOnce() {
   if (!apiBaseLogged && (globalThis as { __DEV__?: boolean }).__DEV__) {
@@ -188,7 +184,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
 
 let token: string | null = null;
 export function setApiToken(value: string | null) { token = value; }
-export function getApiToken() { return token; }
 function authHeader(): Record<string, string> { return token ? { Authorization: `Bearer ${token}` } : {}; }
 
 // Central 401 hook: the auth context registers a logout here so an expired or

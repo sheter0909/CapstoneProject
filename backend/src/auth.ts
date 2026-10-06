@@ -5,7 +5,14 @@ import { prisma } from './db.js';
 import { config } from './config.js';
 import type { Role } from './middleware.js';
 
-const models: Record<Role, any> = { admin: prisma.admin, household: prisma.household, collector: prisma.garbageCollector };
+function modelFor(role: Role) {
+  // Looked up per-request (not at import time) so a stale/partially
+  // generated Prisma client fails with a clear error instead of
+  // `Invalid Model.findFirst() invocation` on `undefined`.
+  if (role === 'admin') return prisma.admin;
+  if (role === 'household') return prisma.household;
+  return prisma.garbageCollector;
+}
 
 type Account = { id: string; fullName?: string; name?: string; email?: string; householdId?: string; collectorId?: string; password: string; status?: string };
 
@@ -20,34 +27,21 @@ export function encryptPasswordDisplay(plainText: string): string {
   return `${iv.toString('hex')}:${encrypted}`;
 }
 
-export function decryptPasswordDisplay(encryptedData: string | null | undefined): string {
-  if (!encryptedData) return '';
-  try {
-    const parts = encryptedData.split(':');
-    if (parts.length !== 2) return '';
-    const [ivHex, cipherHex] = parts;
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-    let decrypted = decipher.update(cipherHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch {
-    return '';
-  }
-}
-
-export async function issueToken(id: string, role: Role, name?: string) {
+async function issueToken(id: string, role: Role, name?: string) {
   return jwt.sign({ id, role, name }, config.jwtSecret, { expiresIn: config.jwtExpiresIn as SignOptions['expiresIn'] });
 }
 
 export async function login(role: Role, identifier: string, rawPassword: string) {
-  const Model = models[role];
+  const Model = modelFor(role);
+  if (!Model || typeof (Model as any).findFirst !== 'function') {
+    throw new Error(`Auth backend not initialized for role "${role}". Regenerate Prisma client and rebuild.`);
+  }
   const trimmed = identifier.trim();
   const field = role === 'admin' ? { email: trimmed.toLowerCase() } : role === 'household' ? { householdId: trimmed } : { collectorId: trimmed.toUpperCase() };
-  const account = await Model.findFirst({ where: field }) as Account | null;
+  const account = await (Model as any).findFirst({ where: field }) as Account | null;
   if (!account || !(await bcrypt.compare(rawPassword, account.password))) return { error: 'Invalid credentials.' } as const;
-  if (account.status === 'archived') return { error: 'This account has been archived.' } as const;
-  if (account.status === 'inactive') return { error: 'This account is inactive.' } as const;
+  if (account.status === 'archived') return { error: 'This account has been archived.', forbidden: true } as const;
+  if (account.status === 'inactive') return { error: 'This account is inactive.', forbidden: true } as const;
   const id = role === 'household'
     ? account.householdId!
     : role === 'collector'
