@@ -15,6 +15,7 @@ interface Household {
   status: 'active' | 'inactive' | 'archived';
   previousStatus?: 'active' | 'inactive' | 'archived';
   purok?: string;
+  address?: string;
   birthdate?: string;
   password?: string;
   username?: string;
@@ -60,6 +61,7 @@ export default function HouseholdsPage() {
     unit: '',
     password: '',
     purok: '',
+    address: '',
   });
   const [formErrors, setFormErrors] = useState<{
     name?: string;
@@ -90,6 +92,7 @@ export default function HouseholdsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [collectionHistory, setCollectionHistory] = useState<CollectionHistoryEntry[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [hasStoredSession] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -114,7 +117,8 @@ export default function HouseholdsPage() {
             id: account.id,
             name: account.fullName,
             email: account.householdId,
-            unit: account.address ?? '',
+            unit: account.birthdate ?? '',
+            address: account.address ?? account.purok,
             purok: account.purok,
             birthdate: account.birthdate ?? '',
             joinDate: account.joinDate,
@@ -123,7 +127,7 @@ export default function HouseholdsPage() {
           }))
         )
       )
-      .catch(() => undefined)
+      .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Unable to load households.'))
       .finally(() => setIsLoading(false));
   }, [router, hasStoredSession]);
 
@@ -134,7 +138,7 @@ export default function HouseholdsPage() {
     setIsEditing(false);
     setShowPassword(false);
     setFormErrors({});
-    setFormData({ name: '', email: '', unit: '', password: '', purok: '' });
+    setFormData({ name: '', email: '', unit: '', password: '', purok: '', address: '' });
   };
 
   const handleAddHousehold = (e: React.FormEvent) => {
@@ -172,6 +176,7 @@ export default function HouseholdsPage() {
       email: formData.email.trim(),
       unit: formData.unit.trim(),
       purok: formData.purok.trim(),
+      address: formData.address.trim() || formData.purok.trim(),
       username: formData.email.trim(),
       password: formData.password,
       joinDate: new Date().toISOString().split('T')[0],
@@ -211,7 +216,7 @@ export default function HouseholdsPage() {
         householdId: selectedHousehold.email,
         fullName: formData.name.trim(),
         purok: formData.purok.trim(),
-        address: formData.purok.trim(),
+        address: formData.address.trim() || formData.purok.trim(),
         birthdate: formData.unit.trim() || undefined,
         password: formData.password || undefined,
       }) as BackendHouseholdAccount;
@@ -220,6 +225,7 @@ export default function HouseholdsPage() {
         ...selectedHousehold,
         name: account.fullName,
         purok: account.purok,
+        address: (account.address ?? formData.address.trim()) || formData.purok.trim(),
         unit: account.birthdate ?? formData.unit.trim(),
         birthdate: account.birthdate ?? formData.unit.trim(),
       };
@@ -231,7 +237,7 @@ export default function HouseholdsPage() {
       setIsEditing(false);
       setShowPassword(false);
       setFormErrors({});
-      setFormData({ name: '', email: '', unit: '', password: '', purok: '' });
+      setFormData({ name: '', email: '', unit: '', password: '', purok: '', address: '' });
       setToastMessage('Household updated successfully');
       setTimeout(() => setToastMessage(null), 2200);
       setShowUpdateSuccess(true);
@@ -274,7 +280,7 @@ export default function HouseholdsPage() {
         householdId: pendingNewHousehold.email,
         fullName: pendingNewHousehold.name,
         purok: pendingNewHousehold.purok,
-        address: pendingNewHousehold.purok,
+        address: pendingNewHousehold.address || pendingNewHousehold.purok,
         birthdate: pendingNewHousehold.unit || undefined,
         password: pendingNewHousehold.password,
       }) as BackendHouseholdAccount;
@@ -295,7 +301,7 @@ export default function HouseholdsPage() {
       setHouseholds(updatedHouseholds);
       setSelectedHousehold(updatedHousehold);
 
-      setFormData({ name: '', email: '', unit: '', password: '', purok: '' });
+      setFormData({ name: '', email: '', unit: '', password: '', purok: '', address: '' });
       setShowForm(false);
       setShowConfirmRegister(false);
       setShowRegisterSuccess(true);
@@ -356,6 +362,7 @@ export default function HouseholdsPage() {
       unit: household.birthdate || '',
       password: '',
       purok: household.purok || '',
+      address: household.address || household.purok || '',
     });
     setFormErrors({});
     setShowPassword(false);
@@ -507,6 +514,19 @@ export default function HouseholdsPage() {
                     <option value="Purok 4" />
                   </datalist>
                   {formErrors.purok && <p className="mt-1.5 text-xs font-semibold text-rose-600">{formErrors.purok}</p>}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Address</label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => {
+                      setFormData({ ...formData, address: e.target.value });
+                    }}
+                    className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-gray-700 placeholder-gray-400 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100"
+                    placeholder="Street / landmark (defaults to purok)"
+                  />
                 </div>
 
                 <div>
@@ -894,6 +914,12 @@ export default function HouseholdsPage() {
           { label: selectedHousehold?.status === 'archived' ? 'Restore' : 'Confirm Archive', onClick: handleArchiveHousehold, variant: 'primary' },
         ]}
       />
+
+      {loadError && (
+        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {loadError}
+        </div>
+      )}
 
       {toastMessage && (
         <div className="fixed right-4 top-4 z-[60] rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm font-semibold text-green-700 shadow-lg">
