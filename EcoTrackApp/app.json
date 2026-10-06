@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "EcoTrackApp",
+    "name": "EcoTrack",
     "slug": "ecotrack-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,9 +8,12 @@
     "scheme": "ecotrackapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.ecotrack.app"
     },
     "android": {
+      "package": "com.ecotrack.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

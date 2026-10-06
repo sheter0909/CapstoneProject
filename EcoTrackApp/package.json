@@ -39,6 +39,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "export": "expo export -p web",
+    "build:apk": "eas build -p android --profile preview",
     "vercel-build": "expo export -p web"
   },
   "private": true,

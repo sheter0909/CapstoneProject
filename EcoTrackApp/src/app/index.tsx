@@ -1,10 +1,12 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
+
+const APK_URL = process.env.EXPO_PUBLIC_APK_URL ?? '';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -93,6 +95,13 @@ export default function LoginScreen() {
           <Pressable style={styles.secondaryButton} onPress={() => router.push('/garbagecollector/login' as any)}>
             <Text style={styles.secondaryButtonText}>LOGIN AS GARBAGE COLLECTOR</Text>
           </Pressable>
+
+          {APK_URL ? (
+            <Pressable style={styles.apkButton} onPress={() => Linking.openURL(APK_URL)}>
+              <MaterialIcons name="android" size={20} color="#FFF" />
+              <Text style={styles.apkButtonText}>DOWNLOAD ANDROID APP (APK)</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.footerCard}>
@@ -209,6 +218,21 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#1F7A37',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  apkButton: {
+    marginTop: 12,
+    borderRadius: 14,
+    backgroundColor: '#1B4A28',
+    paddingVertical: 14,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  apkButtonText: {
+    color: '#FFF',
     fontWeight: '700',
     fontSize: 14,
   },
