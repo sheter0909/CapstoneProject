@@ -30,3 +30,9 @@ Mobile app:
 - Backend: `PORT`, `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGINS` (see `backend/.env.example`).
 - Admin: `NEXT_PUBLIC_API_URL` (see `EcoTrack-Admin/.env.example`).
 - App: `EXPO_PUBLIC_API_URL` (see `EcoTrackApp/.env.example`).
+
+## Deploy
+
+- Backend on Render (`render.yaml`, `rootDir: backend`): build `npm install && npx prisma migrate deploy && npm run build`, start `npm start`, health check `/health`. Full checklist in `DEPLOY.md` (including the one-time Neon enum-migration fix).
+- Admin + App website on Vercel with the correct **Root Directory** (`EcoTrack-Admin` / `EcoTrackApp`). `NEXT_PUBLIC_API_URL` / `EXPO_PUBLIC_API_URL` are baked in at build time — redeploy after changing them.
+- Android APK: `EcoTrackApp/README.md` → "Build the Android APK" (`npm run build:apk` via EAS, then publish through GitHub Releases + `EXPO_PUBLIC_APK_URL`).

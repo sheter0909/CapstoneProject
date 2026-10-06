@@ -1,56 +1,46 @@
-# EcoTrack Admin Dashboard - Next.js Capstone
+# EcoTrack Admin Portal
 
-A comprehensive residential waste management admin dashboard built with Next.js, TypeScript, and Tailwind CSS.
+Barangay admin portal (Next.js App Router + TypeScript + Tailwind CSS) backed by the EcoTrack Express API (`backend/`). Admins manage households, garbage collectors, announcements/notifications, reports with Excel export, and the activity log.
 
 ## Features
 
-### Authentication System
-- **Login Page** - Secure admin authentication
-- **Signup Page** - Create new admin accounts
-- **Forgot Password** - Password recovery flow
-- **Reset Password** - Secure password reset
-
-### Household Management
-- **Household List** - View all households with details
-- **Household Search & Filter** - Find specific households
-- **QR Code Generation** - Generate household QR codes for waste tracking
-- **Status Management** - Track active/inactive households
-
-### Dashboard
-- Responsive design with Tailwind CSS
-- Clean, modern UI with green branding (EcoTrack theme)
-- Mobile-friendly interface
+- **Login** — admin authentication against `POST /api/auth/admin/login` (JWT session).
+- **Dashboard** — household/collector counts, recent activity.
+- **Households / Garbage Collectors** — CRUD, archive/restore, collection history, QR codes.
+- **Notifications** — send announcements, concerns inbox thread view.
+- **Reports** — summary/weekly/waste-type/monthly charts plus Excel export (`lib/reportExport.ts`).
+- **Activity log / Archive** — audit trail and archived accounts.
 
 ## Project Structure
 
 ```
 EcoTrack-Admin/
 ├── app/
-│   ├── page.tsx              # Welcome home page
-│   ├── login/
-│   │   └── page.tsx          # Login page
-│   ├── signup/
-│   │   └── page.tsx          # Signup page
-│   ├── forgot-password/
-│   │   └── page.tsx          # Forgot password page
-│   ├── reset-password/
-│   │   └── page.tsx          # Reset password page
-│   ├── households/
-│   │   └── page.tsx          # Household management page
-│   ├── layout.tsx
-│   └── globals.css
-├── components/               # Reusable components (for future expansion)
-├── public/
-├── package.json
-├── tsconfig.json
-└── tailwind.config.ts
+│   ├── page.tsx              # Root (redirects to login/dashboard)
+│   ├── login/page.tsx        # Admin login
+│   ├── dashboard/page.tsx    # Stats + recent activity
+│   ├── households/page.tsx   # Household management
+│   ├── garbage-collectors/page.tsx  # Collector management
+│   ├── notifications/page.tsx
+│   ├── reports/page.tsx
+│   ├── activity-log/page.tsx
+│   ├── archive/page.tsx
+│   └── layout.tsx
+├── components/               # Shared UI (ui.tsx, Modal, Pagination, AppShell)
+├── lib/                      # API client (api.ts), export helpers
+└── package.json
 ```
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js 18+ installed
-- npm or yarn package manager
+- npm package manager
+- The backend running (`../backend`, `npm run dev` on `http://localhost:4000`)
+
+### Env
+
+Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_API_URL` to the backend URL including `/api` (defaults to the Render deploy if unset).
 
 ### Installation
 
@@ -62,7 +52,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+Open [http://localhost:3000](http://localhost:3000) in your browser (redirects to `/login` when signed out).
 
 ## Development
 
@@ -75,38 +65,26 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the a
 
 ### Technologies Used
 
-- **Next.js 15** - React framework with App Router
+- **Next.js** (App Router) - React framework
 - **TypeScript** - Type-safe JavaScript
 - **Tailwind CSS** - Utility-first CSS framework
-- **QRCode React** - QR code generation
-- **NextAuth.js** - Authentication (ready for integration)
+- **qrcode.react** - QR code generation
+- **xlsx** - Excel export for reports
 
 ## Page Routes
 
-- `/` - Welcome/Home page
+- `/` - Root (auth redirect)
 - `/login` - Admin login
-- `/signup` - Create new account
-- `/forgot-password` - Password recovery
-- `/reset-password` - Reset password
-- `/households` - Household management dashboard
-
-## Future Enhancements
-
-- [ ] Backend API integration
-- [ ] Database setup (PostgreSQL/MongoDB)
-- [ ] Authentication implementation
-- [ ] Waste tracking analytics
-- [ ] Notification system
-- [ ] Dashboard statistics and charts
-- [ ] Export resident data
+- `/dashboard` - Stats + recent activity
+- `/households` - Household management
+- `/garbage-collectors` - Collector management
+- `/notifications` - Announcements + concerns inbox
+- `/reports` - Analytics + Excel export
+- `/activity-log` - Audit trail
+- `/archive` - Archived accounts
 
 ## Notes
 
-- All authentication pages are UI-only and ready for backend integration
-- QR codes are generated client-side for demonstration
-- Responsive design works on mobile, tablet, and desktop
-
----
-
-**Status**: Development Phase - UI Complete, Ready for Backend Integration
-# CapstoneAdmin
+- Auth is JWT-backed via the Express API (no NextAuth); route guards check the stored session client-side.
+- QR codes encode `household-{householdId}` for the collector app scanner.
+- Responsive design works on mobile, tablet, and desktop.

@@ -21,6 +21,11 @@ The API listens on `http://localhost:4000` by default. Every response uses `{ su
 
 List endpoints accept `page` and `limit` and return `{ items, total, page, totalPages }` in `data`.
 
+## Source layout
+
+- `src/routes/` — one module per domain: `auth`, `households`, `collectors`, `collections`, `notifications`, `reports`, `activity`, plus shared `helpers`. `src/routes.ts` only composes them onto a single router (registration order preserved).
+- `scripts/route-map.ts` — prints every registered route as `METHOD /path [middleware-count]` (sorted). Run `npx tsx scripts/route-map.ts` before/after touching routes; the outputs must be identical.
+
 ## Assumptions
 
 - Inactive and archived accounts cannot log in; archived records remain queryable through Archive endpoints.
