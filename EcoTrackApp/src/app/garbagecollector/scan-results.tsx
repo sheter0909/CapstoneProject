@@ -120,7 +120,7 @@ export default function GarbageCollectorScanResultsScreen() {
                     navParams.weight = String(mostRecent.weightKg);
                     if (mostRecent.editableUntil) navParams.editableUntil = mostRecent.editableUntil;
                   }
-                  router.push({ pathname: '/garbagecollector/garbage-input' as any, params: navParams });
+                  router.push({ pathname: '/garbagecollector/garbage-input', params: navParams });
                 }}
               >
                 <Text style={styles.primaryButtonText}>Proceed to Collection Input</Text>

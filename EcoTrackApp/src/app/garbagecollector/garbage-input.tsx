@@ -39,7 +39,7 @@ export default function GarbageCollectorGarbageInputScreen() {
       const body: { householdId: string; segregationStatus: string; weightKg: number; wasteType?: string } = { householdId, segregationStatus: segregated === 'segregated' ? 'segregated' : 'not_segregated', weightKg: numericWeight };
       body.wasteType = segregated === 'segregated' ? wasteType.toLowerCase().replace(/-/g, '_') : 'mixed';
       const entry = editing ? await collectorApi.updateCollection(String(params.entryId), body) : await collectorApi.submitCollection(body);
-      router.replace({ pathname: '/garbagecollector/submission-confirmation' as any, params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '', editableUntil: entry.editableUntil ?? params.editableUntil ?? '' } });
+      router.replace({ pathname: '/garbagecollector/submission-confirmation', params: { entryId: entry.id, householdId: body.householdId, segregated, wasteType: segregated === 'segregated' ? wasteType : 'Mixed', weight: String(numericWeight), edited: editing ? 'true' : 'false', warningLevel: entry.warning?.level ?? '', warningRemoved: entry.warningRemoved ? 'true' : 'false', nextWarningLevel: params.nextWarningLevel ?? '', editableUntil: entry.editableUntil ?? params.editableUntil ?? '' } });
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to save this entry.'); } finally { setSaving(false); }
   };
 
@@ -50,7 +50,7 @@ export default function GarbageCollectorGarbageInputScreen() {
           <>
             <Text style={styles.title}>Garbage Input</Text>
             <Text style={styles.errorText}>Missing household. Please go back to Quick Scan and scan again.</Text>
-            <Pressable style={styles.linkButton} onPress={() => router.replace('/garbagecollector/quick-scan' as any)}>
+            <Pressable style={styles.linkButton} onPress={() => router.replace('/garbagecollector/quick-scan')}>
               <Text style={styles.linkText}>Back to Quick Scan</Text>
             </Pressable>
           </>

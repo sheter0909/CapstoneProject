@@ -51,9 +51,9 @@ export function requireAuth(...roles: Role[]) {
 export function validateRequest(req: Request, res: Response, next: NextFunction) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const formattedErrors = errors.array().map((err: any) => ({
-      field: err.path || err.param || 'general',
-      message: err.msg || 'Invalid value.',
+    const formattedErrors = errors.array().map((err: { path?: unknown; param?: unknown; msg?: unknown }) => ({
+      field: typeof err.path === 'string' ? err.path : typeof err.param === 'string' ? err.param : 'general',
+      message: typeof err.msg === 'string' ? err.msg : 'Invalid value.',
     }));
     return fail(res, 422, 'Validation failed.', formattedErrors);
   }

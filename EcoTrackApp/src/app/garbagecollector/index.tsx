@@ -14,7 +14,7 @@ export default function GarbageCollectorHomeScreen() {
     let isMounted = true;
     collectorApi
       .reports()
-      .then((data: any) => {
+      .then((data) => {
         if (isMounted && Array.isArray(data)) {
           setReports(data);
         }
@@ -45,7 +45,7 @@ export default function GarbageCollectorHomeScreen() {
         <Text style={styles.subtitle}>Collector ID: {collectorUser?.collectorId || 'Pending'}</Text>
       </View>
 
-      <Pressable style={styles.scanHero} onPress={() => router.push('/garbagecollector/quick-scan' as any)}>
+      <Pressable style={styles.scanHero} onPress={() => router.push('/garbagecollector/quick-scan')}>
         <Text style={styles.scanHeroTitle}>Quick Scan</Text>
         <Text style={styles.scanHeroSubtitle}>Scan a household QR code to start a collection</Text>
       </Pressable>

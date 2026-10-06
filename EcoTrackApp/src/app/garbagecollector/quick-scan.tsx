@@ -29,7 +29,7 @@ export default function GarbageCollectorQuickScanScreen() {
 
   const navigateToResults = (targetId: string) => {
     router.push({
-      pathname: '/garbagecollector/scan-results' as any,
+      pathname: '/garbagecollector/scan-results',
       params: { householdId: targetId },
     });
   };

@@ -28,7 +28,7 @@ export default function ForgotCollectorPasswordScreen() {
       return;
     }
 
-    router.push('/garbagecollector/reset-password' as any);
+    router.push('/garbagecollector/reset-password');
   };
 
   return (

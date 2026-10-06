@@ -13,7 +13,7 @@ export default function GarbageCollectorReportsScreen() {
     let isMounted = true;
     collectorApi
       .reports()
-      .then((data: any) => {
+      .then((data) => {
         if (isMounted && Array.isArray(data)) {
           setReports(data);
         }
@@ -60,7 +60,7 @@ export default function GarbageCollectorReportsScreen() {
           </>
         )}
 
-        <Pressable style={styles.primaryButton} onPress={() => router.push('/garbagecollector' as any)}>
+        <Pressable style={styles.primaryButton} onPress={() => router.push('/garbagecollector')}>
           <Text style={styles.primaryButtonText}>Back to Dashboard</Text>
         </Pressable>
       </View>

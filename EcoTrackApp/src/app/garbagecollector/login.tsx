@@ -32,7 +32,7 @@ export default function GarbageCollectorLoginScreen() {
         return;
       }
 
-      router.push('/garbagecollector' as any);
+      router.push('/garbagecollector');
     } finally {
       setIsLoading(false);
     }
@@ -100,7 +100,7 @@ export default function GarbageCollectorLoginScreen() {
             <Text style={styles.primaryButtonText}>{isLoading ? 'LOGGING IN...' : 'LOGIN'}</Text>
           </Pressable>
 
-          <Pressable style={styles.ghostButton} onPress={() => router.push('/garbagecollector/forgot-password' as any)}>
+          <Pressable style={styles.ghostButton} onPress={() => router.push('/garbagecollector/forgot-password')}>
             <Text style={styles.ghostButtonText}>Forgot password?</Text>
           </Pressable>
 

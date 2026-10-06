@@ -19,7 +19,7 @@ export default function SubmissionConfirmationScreen() {
   const warningRemoved = params.warningRemoved === 'true';
 
   const isSegregated = params.segregated === 'segregated';
-  const editEntry = () => router.push({ pathname: '/garbagecollector/garbage-input' as any, params });
+  const editEntry = () => router.push({ pathname: '/garbagecollector/garbage-input', params });
 
   return (
     <View style={styles.container}>
@@ -30,7 +30,7 @@ export default function SubmissionConfirmationScreen() {
         {warningLevel ? <Text style={styles.warningText}>Warning sent: {warningLevel}</Text> : null}
         {warningRemoved ? <Text style={styles.removedText}>Warning removed</Text> : null}
         {editAllowed && <Pressable style={styles.primaryButton} onPress={editEntry}><Text style={styles.primaryText}>Edit Entry</Text></Pressable>}
-        <Pressable style={styles.secondaryButton} onPress={() => router.replace('/garbagecollector/quick-scan' as any)}><Text style={styles.secondaryText}>Done / Back to Scan</Text></Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => router.replace('/garbagecollector/quick-scan')}><Text style={styles.secondaryText}>Done / Back to Scan</Text></Pressable>
       </View>
     </View>
   );

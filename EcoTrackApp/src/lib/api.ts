@@ -245,7 +245,7 @@ export const collectorApi = {
       body: JSON.stringify(body),
     }),
   activityLogs: () => apiRequest<{ items: CollectionHistoryItem[]; total: number; page: number; totalPages: number }>('/collectors/me/activity-logs'),
-  reports: () => apiRequest<unknown>('/collectors/me/reports'),
+  reports: () => apiRequest<{ _id: string; totalKg: number; entries: number }[]>('/collectors/me/reports'),
   notifications: () => apiRequest<NotificationItem[]>('/collectors/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>
     apiRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),

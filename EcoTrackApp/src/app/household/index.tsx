@@ -89,7 +89,7 @@ export default function HouseholdHomeScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Notifications</Text>
-          <Pressable onPress={() => router.push('/household/notifications' as any)}>
+          <Pressable onPress={() => router.push('/household/notifications')}>
             <Text style={styles.linkText}>View All</Text>
           </Pressable>
         </View>
@@ -108,7 +108,7 @@ export default function HouseholdHomeScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Collection History</Text>
-          <Pressable onPress={() => router.push('/household/history' as any)}>
+          <Pressable onPress={() => router.push('/household/history')}>
             <Text style={styles.linkText}>View All</Text>
           </Pressable>
         </View>
@@ -133,11 +133,11 @@ export default function HouseholdHomeScreen() {
         )}
       </View>
 
-      <Pressable style={styles.qrButton} onPress={() => router.push('/household/qr' as any)}>
+      <Pressable style={styles.qrButton} onPress={() => router.push('/household/qr')}>
         <Text style={styles.qrButtonText}>VIEW YOUR QR CODE</Text>
       </Pressable>
 
-      <Pressable style={styles.logoutButton} onPress={() => router.push('/household/logout' as any)}>
+      <Pressable style={styles.logoutButton} onPress={() => router.push('/household/logout')}>
         <Text style={styles.logoutButtonText}>ACCOUNT & LOGOUT</Text>
       </Pressable>
     </ScrollView>

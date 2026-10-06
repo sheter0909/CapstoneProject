@@ -1,10 +1,10 @@
-import { Link, Slot, useRouter, useSegments } from 'expo-router';
+import { Link, Slot, useRouter, useSegments, type Href } from 'expo-router';
 import { Animated, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Spacing } from '@/constants/theme';
 
-const menuItems = [
+const menuItems: { label: string; href: Href; segment: string }[] = [
   { label: 'Main', href: '/garbagecollector', segment: 'garbagecollector' },
   { label: 'Quick Scan', href: '/garbagecollector/quick-scan', segment: 'quick-scan' },
   { label: 'Notifications', href: '/garbagecollector/notifications', segment: 'notifications' },
@@ -35,9 +35,9 @@ export default function GarbageCollectorLayout() {
       ? segments.length === 1 || activeSegment === 'garbagecollector'
       : activeSegment === segment;
 
-  const handleNavigate = (href: string) => {
+  const handleNavigate = (href: Href) => {
     setIsMenuOpen(false);
-    router.push(href as any);
+    router.push(href);
   };
 
   return (
@@ -64,7 +64,7 @@ export default function GarbageCollectorLayout() {
 
               {menuItems.map((item) => (
                 <Pressable
-                  key={item.href}
+                  key={item.segment}
                   style={({ pressed }) => [
                     styles.navItem,
                     isActive(item.segment) && styles.navItemActive,
@@ -101,8 +101,8 @@ export default function GarbageCollectorLayout() {
             <View style={styles.menuList}>
               {menuItems.map((item) => (
                 <Link
-                  key={item.href}
-                  href={item.href as any}
+                  key={item.segment}
+                  href={item.href}
                   style={[
                     styles.navItem,
                     isActive(item.segment) && styles.navItemActive,

@@ -17,13 +17,13 @@ export default function ResetCollectorPasswordScreen() {
 
   useEffect(() => {
     if (!collectorRecoveryVerified && !isReset) {
-      router.replace('/garbagecollector/forgot-password' as any);
+      router.replace('/garbagecollector/forgot-password');
       return;
     }
 
     if (!isReset) return;
 
-    const timeout = setTimeout(() => router.replace('/garbagecollector/login' as any), 1800);
+    const timeout = setTimeout(() => router.replace('/garbagecollector/login'), 1800);
     return () => clearTimeout(timeout);
   }, [collectorRecoveryVerified, isReset, router]);
 

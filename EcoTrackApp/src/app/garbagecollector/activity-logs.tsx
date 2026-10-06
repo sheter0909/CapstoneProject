@@ -84,7 +84,7 @@ export default function GarbageCollectorActivityLogsScreen() {
                 ? summary.nextWarningLevel
                 : 'a warning';
             router.push({
-              pathname: '/garbagecollector/garbage-input' as any,
+              pathname: '/garbagecollector/garbage-input',
               params: {
                 entryId: entry.id,
                 householdId: entry.householdId,
