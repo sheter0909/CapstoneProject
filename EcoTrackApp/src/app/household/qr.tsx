@@ -11,7 +11,9 @@ export default function HouseholdQrScreen() {
   const householdId = householdUser?.householdId || '0123';
   const fullName = householdUser?.fullName || 'Household Member';
   const address = [householdUser?.purok, householdUser?.address].filter(Boolean).join(', ') || 'Community Resident';
-  const qrData = `household-${householdId}-${householdUser?.address || ''}`;
+  // QR contract: `household-{householdId}` only. The scanner splits on '-' and
+  // reads segments[1], so no suffix (address, commas, extra dashes) may be appended.
+  const qrData = `household-${householdId}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrData)}`;
 
   return (

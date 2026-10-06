@@ -81,8 +81,8 @@ export default function CollectorNotificationsScreen() {
               </Text>
               <Text style={styles.notificationDescription}>{item.message}</Text>
               <View style={styles.notificationFooter}>
-                <View style={item.level.toLowerCase().includes('warning') ? styles.notificationBadge : styles.notificationBadgeSecondary}>
-                  <Text style={item.level.toLowerCase().includes('warning') ? styles.badgeText : styles.badgeTextSecondary}>
+                <View style={(item.level ?? '').toLowerCase().includes('warning') ? styles.notificationBadge : styles.notificationBadgeSecondary}>
+                  <Text style={(item.level ?? '').toLowerCase().includes('warning') ? styles.badgeText : styles.badgeTextSecondary}>
                     {item.level || 'Announcement'}
                   </Text>
                 </View>

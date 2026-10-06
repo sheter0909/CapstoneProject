@@ -1,12 +1,19 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 
-const APK_URL = process.env.EXPO_PUBLIC_APK_URL ?? '';
+const APK_URL: string = process.env.EXPO_PUBLIC_APK_URL ?? '';
+const IS_WEB: boolean = Platform.OS === 'web';
+// Best-effort iOS detection on web only; never evaluated in the native app.
+const IS_IOS_WEB: boolean =
+  IS_WEB &&
+  typeof navigator !== 'undefined' &&
+  (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -27,7 +34,8 @@ export default function LoginScreen() {
     const result = await loginHousehold(houseId.trim(), password);
     setIsLoading(false);
     if (result.success) {
-      router.push('/household' as any);
+      router.push('/household');
+
     } else {
       setError(result.error ?? 'Invalid House ID or password.');
     }
@@ -92,15 +100,18 @@ export default function LoginScreen() {
             <Text style={styles.ghostButtonText}>Forgot password?</Text>
           </Pressable>
 
-          <Pressable style={styles.secondaryButton} onPress={() => router.push('/garbagecollector/login' as any)}>
+          <Pressable style={styles.secondaryButton} onPress={() => router.push('/garbagecollector/login')}>
             <Text style={styles.secondaryButtonText}>LOGIN AS GARBAGE COLLECTOR</Text>
           </Pressable>
 
-          {APK_URL ? (
+          {IS_WEB && APK_URL && !IS_IOS_WEB ? (
             <Pressable style={styles.apkButton} onPress={() => Linking.openURL(APK_URL)}>
               <MaterialIcons name="android" size={20} color="#FFF" />
               <Text style={styles.apkButtonText}>DOWNLOAD ANDROID APP (APK)</Text>
             </Pressable>
+          ) : null}
+          {IS_WEB && APK_URL && IS_IOS_WEB ? (
+            <Text style={styles.apkNote}>The downloadable app is Android only.</Text>
           ) : null}
         </View>
 
@@ -235,6 +246,12 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  apkNote: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#6B7280',
+    fontSize: 12,
   },
   footerCard: {
     backgroundColor: '#FFFFFF',
