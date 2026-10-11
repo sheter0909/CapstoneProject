@@ -1,33 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
+import { AppButton, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { CollectionHistoryItem, householdApi, NotificationItem } from '@/lib/api';
 
-const COMPLIANT_MESSAGES = [
-  {
-    title: 'Great job!',
-    body: 'Your household is currently compliant. Keep segregating your waste properly.',
-  },
-  {
-    title: "You're doing great!",
-    body: 'No violations recorded. Keep up the proper waste segregation.',
-  },
-  {
-    title: 'Well done!',
-    body: 'Your household is in good standing. Continue segregating your waste correctly.',
-  },
-];
+const COMPLIANT_MESSAGE = {
+  title: 'Great job!',
+  body: 'Your household is currently compliant. Keep segregating your waste properly.',
+};
 
 export default function HouseholdHomeScreen() {
   const router = useRouter();
   const { householdUser, hydrated, refreshHouseholdProfile } = useAuth();
   const [latestHistory, setLatestHistory] = useState<CollectionHistoryItem | null>(null);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
-  const [compliantMessage] = useState(
-    () => COMPLIANT_MESSAGES[Math.floor(Math.random() * COMPLIANT_MESSAGES.length)],
-  );
+  const compliantMessage = COMPLIANT_MESSAGE;
 
   useEffect(() => {
     let isMounted = true;
@@ -87,12 +76,7 @@ export default function HouseholdHomeScreen() {
       </View>
 
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          <Pressable onPress={() => router.push('/household/notifications')}>
-            <Text style={styles.linkText}>View All</Text>
-          </Pressable>
-        </View>
+        <SectionHeader title="Notifications" actionLabel="View all" onAction={() => router.push('/household/notifications')} />
         {latestNotification ? (
           <View style={styles.notificationItem}>
             <Text style={styles.notificationTitle}>{latestNotification.title}</Text>
@@ -106,12 +90,7 @@ export default function HouseholdHomeScreen() {
       </View>
 
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Collection History</Text>
-          <Pressable onPress={() => router.push('/household/history')}>
-            <Text style={styles.linkText}>View All</Text>
-          </Pressable>
-        </View>
+        <SectionHeader title="Collection History" actionLabel="View all" onAction={() => router.push('/household/history')} />
         {latestHistory ? (
           <View style={styles.historyRow}>
             <View>
@@ -133,13 +112,7 @@ export default function HouseholdHomeScreen() {
         )}
       </View>
 
-      <Pressable style={styles.qrButton} onPress={() => router.push('/household/qr')}>
-        <Text style={styles.qrButtonText}>VIEW YOUR QR CODE</Text>
-      </Pressable>
-
-      <Pressable style={styles.logoutButton} onPress={() => router.push('/household/logout')}>
-        <Text style={styles.logoutButtonText}>ACCOUNT & LOGOUT</Text>
-      </Pressable>
+      <AppButton title="View your QR code" onPress={() => router.push('/household/qr')} />
     </ScrollView>
   );
 }
@@ -192,10 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: Spacing.four,
     gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
+    boxShadow: '0px 8px 12px rgba(0,0,0,0.05)',
     elevation: 3,
   },
   compliantBanner: {
@@ -234,20 +204,6 @@ const styles = StyleSheet.create({
     color: '#7A4A15',
     lineHeight: 22,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1F7A37',
-  },
-  linkText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-  },
   notificationItem: {
     marginTop: Spacing.two,
     borderRadius: 18,
@@ -285,31 +241,6 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#1F7A37',
     fontWeight: '700',
-  },
-  qrButton: {
-    marginTop: Spacing.one,
-    backgroundColor: '#1F7A37',
-    borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  qrButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  logoutButton: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  logoutButtonText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   emptyItem: {
     backgroundColor: '#F9FAF9',

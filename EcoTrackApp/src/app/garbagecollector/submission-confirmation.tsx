@@ -38,7 +38,7 @@ export default function SubmissionConfirmationScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: Spacing.four, justifyContent: 'center', backgroundColor: '#F2F8F2' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: Spacing.four, gap: Spacing.three, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: Spacing.four, gap: Spacing.three, boxShadow: '0px 8px 12px rgba(0,0,0,0.05)', elevation: 3 },
   eyebrow: { color: '#1F7A37', fontWeight: '800', textTransform: 'uppercase' },
   title: { color: '#1F7A37', fontSize: 20, fontWeight: '800', lineHeight: 28 },
   subtitle: { color: '#4A4A4A' },

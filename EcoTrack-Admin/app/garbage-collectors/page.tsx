@@ -403,7 +403,7 @@ export default function GarbageCollectorsPage() {
 
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="fixed inset-0 bg-black/50" onClick={isSubmitting ? undefined : resetFormState} />
+            <div className={`fixed inset-0 bg-black/50 ${isSubmitting ? '' : 'cursor-pointer'}`} onClick={isSubmitting ? undefined : resetFormState} />
             <div className="relative z-10 w-full max-w-3xl rounded-[28px] bg-white p-6 shadow-2xl sm:p-8">
               <div className="mb-6 flex items-center justify-between">
                 <div>

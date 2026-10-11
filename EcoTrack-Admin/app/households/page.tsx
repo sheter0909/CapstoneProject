@@ -444,7 +444,7 @@ export default function HouseholdsPage() {
         {/* Add/Edit Form Modal */}
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="fixed inset-0 bg-black/50" onClick={resetFormState} />
+            <div className="fixed inset-0 cursor-pointer bg-black/50" onClick={resetFormState} />
 
             <div className="relative z-10 w-full max-w-3xl rounded-[28px] bg-white p-6 shadow-2xl sm:p-8">
               <div className="mb-6 flex items-center justify-between">
@@ -669,7 +669,31 @@ export default function HouseholdsPage() {
                   </thead>
                   <tbody>
                     {filteredHouseholds.map((household, index) => (
-                      <tr key={household.id} className={index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}>
+                      <tr
+                        key={household.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View ${household.name}`}
+                        aria-current={selectedHousehold?.id === household.id || undefined}
+                        onClick={() => {
+                          setSelectedHousehold(household);
+                          setShowQR(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedHousehold(household);
+                            setShowQR(false);
+                          }
+                        }}
+                        className={`cursor-pointer transition hover:bg-green-100/60 ${
+                          selectedHousehold?.id === household.id
+                            ? 'bg-green-100/80 outline outline-1 outline-inset outline-green-300'
+                            : index % 2 === 0
+                              ? 'bg-white'
+                              : 'bg-green-50/40'
+                        }`}
+                      >
                         <td className="break-words px-2 py-4 text-sm text-gray-600 sm:px-3">{household.email}</td>
                         <td className="break-words px-2 py-4 text-sm font-semibold text-gray-900 sm:px-3">{household.name}</td>
                         <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{household.purok}</td>
@@ -700,7 +724,8 @@ export default function HouseholdsPage() {
                         <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{new Date(household.joinDate).toLocaleDateString()}</td>
                         <td className="px-2 py-4 sm:px-3">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedHousehold(household);
                               setShowQR(false);
                             }}

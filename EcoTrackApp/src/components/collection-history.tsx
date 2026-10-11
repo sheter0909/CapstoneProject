@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { webCursor } from './ui';
 
 export type HistoryRow = {
   id: string;
@@ -101,7 +102,7 @@ export default function CollectionHistory({
         <Text style={styles.asOf}>As of {todayStr}</Text>
         <Pressable
           accessibilityLabel="Cycle status filter"
-          style={styles.iconBtn}
+          style={[webCursor(), styles.iconBtn]}
           onPress={() => {
             const i = statusFilters.indexOf(status);
             setStatus(statusFilters[(i + 1) % statusFilters.length]);
@@ -123,7 +124,7 @@ export default function CollectionHistory({
             returnKeyType="search"
           />
           {query.length > 0 ? (
-            <Pressable accessibilityLabel="Clear search" onPress={() => setQuery('')}>
+            <Pressable accessibilityLabel="Clear search" onPress={() => setQuery('')} style={webCursor()}>
               <MaterialIcons name="cancel" size={18} color={GRAY} />
             </Pressable>
           ) : null}
@@ -135,7 +136,7 @@ export default function CollectionHistory({
           <Pressable
             key={f}
             onPress={() => setStatus(f)}
-            style={[styles.chip, status === f && styles.chipActive]}
+            style={[webCursor(), styles.chip, status === f && styles.chipActive]}
           >
             <Text style={[styles.chipText, status === f && styles.chipTextActive]}>{f}</Text>
           </Pressable>
@@ -168,7 +169,7 @@ export default function CollectionHistory({
                 <Text style={styles.rowSub}>{item.subtitle}</Text>
               </View>
               {item.canEdit && onEdit ? (
-                <Pressable accessibilityLabel={`Edit entry ${item.id}`} style={styles.editBtn} onPress={() => onEdit(item)}>
+                <Pressable accessibilityLabel={`Edit entry ${item.id}`} style={[webCursor(), styles.editBtn]} onPress={() => onEdit(item)}>
                   <Text style={styles.editBtnText}>Edit</Text>
                 </Pressable>
               ) : null}

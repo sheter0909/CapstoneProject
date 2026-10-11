@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Colors, Spacing } from '@/constants/theme';
+import { AppButton } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { collectorApi } from '@/lib/api';
 
@@ -45,16 +46,43 @@ export default function GarbageCollectorHomeScreen() {
         <Text style={styles.subtitle}>Collector ID: {collectorUser?.collectorId || 'Pending'}</Text>
       </View>
 
-      <Pressable style={styles.scanHero} onPress={() => router.push('/garbagecollector/quick-scan')}>
+      <View style={styles.scanHero}>
         <Text style={styles.scanHeroTitle}>Quick Scan</Text>
         <Text style={styles.scanHeroSubtitle}>Scan a household QR code to start a collection</Text>
-      </Pressable>
+        <View style={styles.scanCta}>
+          <AppButton title="Scan now" variant="light" onPress={() => router.push('/garbagecollector/quick-scan')} />
+        </View>
+      </View>
 
       <View style={styles.statsCard}>
         <Text style={styles.sectionTitle}>Collection Overview</Text>
-        <Text style={styles.statText}>Total Waste Logged: {totalWaste.toFixed(1)} kg</Text>
-        <Text style={styles.statText}>Segregated: {segregatedWaste.toFixed(1)} kg</Text>
-        <Text style={styles.statText}>Non-segregated: {nonSegregatedWaste.toFixed(1)} kg</Text>
+        <Pressable
+          style={styles.statRow}
+          onPress={() => router.push('/garbagecollector/reports')}
+          accessibilityRole="button"
+          accessibilityLabel="View collection reports"
+        >
+          <Text style={styles.statLabel}>Total waste logged</Text>
+          <Text style={styles.statValue}>{totalWaste.toFixed(1)} kg</Text>
+        </Pressable>
+        <Pressable
+          style={styles.statRow}
+          onPress={() => router.push('/garbagecollector/activity-logs')}
+          accessibilityRole="button"
+          accessibilityLabel="View activity logs"
+        >
+          <Text style={styles.statLabel}>Segregated</Text>
+          <Text style={styles.statValue}>{segregatedWaste.toFixed(1)} kg</Text>
+        </Pressable>
+        <Pressable
+          style={styles.statRow}
+          onPress={() => router.push('/garbagecollector/activity-logs')}
+          accessibilityRole="button"
+          accessibilityLabel="View activity logs"
+        >
+          <Text style={styles.statLabel}>Non-segregated</Text>
+          <Text style={styles.statValue}>{nonSegregatedWaste.toFixed(1)} kg</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -87,21 +115,26 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: Spacing.four,
     gap: 4,
-    alignItems: 'center',
-    shadowColor: '#1F7A37',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    alignItems: 'stretch',
+    boxShadow: '0px 6px 12px rgba(31,122,55,0.25)',
     elevation: 4,
   },
   scanHeroTitle: {
     fontSize: 22,
     fontWeight: '900',
     color: '#FFFFFF',
+    textAlign: 'center',
   },
   scanHeroSubtitle: {
     fontSize: 14,
     color: '#D6F3D1',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  scanCta: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 280,
   },
   subtitle: {
     color: '#4A4A4A',
@@ -112,10 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: Spacing.four,
     gap: Spacing.two,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
+    boxShadow: '0px 8px 12px rgba(0,0,0,0.05)',
     elevation: 3,
   },
   sectionTitle: {
@@ -123,19 +153,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1F7A37',
   },
-  statText: {
-    color: '#4A4A4A',
-    lineHeight: 24,
-  },
-  actionButton: {
-    backgroundColor: '#1F7A37',
-    borderRadius: 18,
-    paddingVertical: 16,
+  statRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2F8F2',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  actionButtonText: {
-    color: '#FFFFFF',
+  statLabel: {
+    color: '#4A4A4A',
+    fontWeight: '600',
+  },
+  statValue: {
+    color: '#1F7A37',
     fontWeight: '800',
-    fontSize: 16,
   },
 });

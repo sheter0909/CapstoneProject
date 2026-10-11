@@ -49,6 +49,8 @@ th {
 
 /* Pointer cursor on every interactive element (Part 24) */
 button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
 a[href],
 select,
 input[type="date"],
@@ -56,8 +58,7 @@ input[type="month"],
 input[type="number"],
 input[type="checkbox"],
 input[type="radio"],
-[role="button"],
-[role="tab"],
+label[for],
 summary {
   cursor: pointer;
 }

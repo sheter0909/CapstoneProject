@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing } from '@/constants/theme';
+import { AppButton, AppTextInput, Card, Field, PasswordField } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 
 export default function GarbageCollectorLoginScreen() {
@@ -19,7 +20,7 @@ export default function GarbageCollectorLoginScreen() {
     setError('');
 
     if (!collectorId.trim() || !password.trim()) {
-      setError('Collector ID and Password are required.');
+      setError('Collector ID and password are required.');
       return;
     }
 
@@ -28,7 +29,7 @@ export default function GarbageCollectorLoginScreen() {
       const result = await loginCollector(collectorId, password);
 
       if (!result.success) {
-        setError(result.error ?? 'Invalid Collector ID or Password.');
+        setError(result.error ?? 'Invalid Collector ID or password.');
         return;
       }
 
@@ -41,73 +42,52 @@ export default function GarbageCollectorLoginScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerBar}>
-          <Text style={styles.headerBrand}>EcoTrack</Text>
-          <Text style={styles.headerSub}>Garbage Collector Portal</Text>
-        </View>
+        <Card>
+          <View>
+            <Text style={styles.brandTitle}>EcoTrack</Text>
+            <Text style={styles.brandSubtitle}>Garbage Collector Portal</Text>
+          </View>
 
-        <View style={styles.card}>
-          <Text style={styles.brandTitleLarge}>EcoTrack</Text>
-          <Text style={styles.brandSubtitle}>Garbage Collector Portal</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Collector ID</Text>
-            <View style={styles.inputWithIcon}>
+          <Field label="Collector ID" helper="Your Collector ID was assigned by your Administrator.">
+            <View style={styles.idRow}>
               <MaterialIcons name="person" size={20} color="#6B8A6B" />
-              <TextInput
+              <AppTextInput
                 value={collectorId}
                 onChangeText={(val) => {
                   setCollectorId(val);
                   if (error) setError('');
                 }}
                 placeholder="e.g. GC-0001"
-                placeholderTextColor="#9AA39A"
-                style={styles.inputWithIconField}
                 autoCapitalize="characters"
+                accessibilityLabel="Collector ID"
+                style={styles.idInput}
               />
             </View>
-            <Text style={styles.helperText}>Your Collector ID was assigned by your Administrator.</Text>
-          </View>
+          </Field>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWithIcon}>
-              <MaterialIcons name="lock" size={20} color="#6B8A6B" />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                placeholder="Enter password"
-                placeholderTextColor="#9AA39A"
-                style={styles.inputWithIconField}
-              />
-              <Pressable
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
-              </Pressable>
-            </View>
-          </View>
+          <Field label="Password">
+            <PasswordField
+              value={password}
+              onChangeText={(val) => {
+                setPassword(val);
+                if (error) setError('');
+              }}
+              showPassword={showPassword}
+              onToggleVisibility={() => setShowPassword(!showPassword)}
+            />
+          </Field>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <Text style={styles.errorText} role="alert">
+              {error}
+            </Text>
+          ) : null}
+          <AppButton title="Login" onPress={handleLogin} loading={isLoading} />
 
-          <Pressable
-            style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            <Text style={styles.primaryButtonText}>{isLoading ? 'LOGGING IN...' : 'LOGIN'}</Text>
-          </Pressable>
+          <AppButton title="Forgot password?" variant="ghost" onPress={() => router.push('/garbagecollector/forgot-password')} />
 
-          <Pressable style={styles.ghostButton} onPress={() => router.push('/garbagecollector/forgot-password')}>
-            <Text style={styles.ghostButtonText}>Forgot password?</Text>
-          </Pressable>
-
-          <Pressable style={styles.secondaryButton} onPress={() => router.push('/')}>
-            <Text style={styles.secondaryButtonText}>Back to Household Login</Text>
-          </Pressable>
-        </View>
+          <AppButton title="Back to Household Login" variant="secondary" onPress={() => router.push('/')} />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -123,48 +103,17 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: Spacing.four,
   },
-  card: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 24,
-    padding: Spacing.four,
-    gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
   brandTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#1B4A28',
+    color: Brand.primaryDark,
   },
   brandSubtitle: {
-    color: '#3C6A43',
+    color: Brand.subtitle,
     marginTop: 4,
-    marginBottom: 20,
     fontSize: 16,
   },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    fontWeight: '600',
-  },
-  input: {
-    height: 48,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E4E8',
-  },
-  inputGroupRow: {
-    gap: Spacing.three,
-  },
-  inputWithIcon: {
+  idRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -175,79 +124,15 @@ const styles = StyleSheet.create({
     borderColor: '#E0E4E8',
     gap: 10,
   },
-  inputWithIconField: {
+  idInput: {
     flex: 1,
     height: '100%',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#1F7A37',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
+    borderWidth: 0,
+    paddingHorizontal: 0,
   },
   errorText: {
-    color: '#B00020',
+    color: Brand.error,
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 8,
-  },
-  secondaryButton: {
-    marginTop: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#0F4F28',
-  },
-  secondaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  headerBar: {
-    backgroundColor: '#1F7A37',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  headerBrand: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  headerSub: {
-    color: '#D6F3D1',
-    fontSize: 12,
-  },
-  brandTitleLarge: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: '#1B4A28',
-    textAlign: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  ghostButton: {
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  ghostButtonText: {
-    color: '#1F7A37',
-    fontWeight: '700',
   },
 });

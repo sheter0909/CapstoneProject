@@ -22,7 +22,7 @@ export default function Modal({ open, title, message, children, actions = [], on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black opacity-40" onClick={onClose} />
+      <div className="fixed inset-0 cursor-pointer bg-black opacity-40" onClick={onClose} />
 
       <div className="bg-white w-full max-w-lg rounded-lg shadow-lg p-6 z-10">
         <div className="mb-4">

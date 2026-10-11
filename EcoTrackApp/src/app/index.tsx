@@ -1,9 +1,10 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing } from '@/constants/theme';
+import { AppButton, AppTextInput, Card, Field, PasswordField } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 
 const APK_URL: string = process.env.EXPO_PUBLIC_APK_URL ?? '';
@@ -44,76 +45,58 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          <Text style={styles.brandTitle}>EcoTrack</Text>
-          <Text style={styles.brandSubtitle}>Household Portal</Text>
+        <Card>
+          <View>
+            <Text style={styles.brandTitle}>EcoTrack</Text>
+            <Text style={styles.brandSubtitle}>Household Portal</Text>
+          </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>House ID</Text>
-            <TextInput
+          <Field label="House ID" helper="Your House ID was provided by your Barangay Admin during enrollment.">
+            <AppTextInput
               value={houseId}
               onChangeText={(val) => {
                 setHouseId(val);
                 if (error) setError('');
               }}
               placeholder="e.g. 011704"
-              placeholderTextColor="#999"
-              style={styles.input}
               autoCapitalize="none"
+              accessibilityLabel="House ID"
             />
-            <Text style={styles.helperText}>Your House ID was provided by your Barangay Admin during enrollment.</Text>
-          </View>
+          </Field>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordInput}>
-              <TextInput
-                value={password}
-                onChangeText={(val) => {
-                  setPassword(val);
-                  if (error) setError('');
-                }}
-                secureTextEntry={!showPassword}
-                placeholder="Enter password"
-                placeholderTextColor="#999"
-                style={styles.passwordField}
-              />
-              <Pressable
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
-              </Pressable>
-            </View>
-          </View>
+          <Field label="Password">
+            <PasswordField
+              value={password}
+              onChangeText={(val) => {
+                setPassword(val);
+                if (error) setError('');
+              }}
+              showPassword={showPassword}
+              onToggleVisibility={() => setShowPassword(!showPassword)}
+            />
+          </Field>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Pressable
-            style={[styles.primaryButton, isLoading && { opacity: 0.7 }]}
-            onPress={handleLogin}
-            disabled={isLoading}
-          >
-            <Text style={styles.primaryButtonText}>{isLoading ? 'LOGGING IN...' : 'LOGIN'}</Text>
-          </Pressable>
+          {error ? (
+            <Text style={styles.errorText} role="alert">
+              {error}
+            </Text>
+          ) : null}
+          <AppButton title="Login" onPress={handleLogin} loading={isLoading} />
 
-          <Pressable style={styles.ghostButton} onPress={() => router.push('/forgot-password')}>
-            <Text style={styles.ghostButtonText}>Forgot password?</Text>
-          </Pressable>
+          <AppButton title="Forgot password?" variant="ghost" onPress={() => router.push('/forgot-password')} />
 
-          <Pressable style={styles.secondaryButton} onPress={() => router.push('/garbagecollector/login')}>
-            <Text style={styles.secondaryButtonText}>LOGIN AS GARBAGE COLLECTOR</Text>
-          </Pressable>
+          <AppButton title="Login as Garbage Collector" variant="secondary" onPress={() => router.push('/garbagecollector/login')} />
 
           {IS_WEB && APK_URL && !IS_IOS_WEB ? (
             <Pressable style={styles.apkButton} onPress={() => Linking.openURL(APK_URL)}>
               <MaterialIcons name="android" size={20} color="#FFF" />
-              <Text style={styles.apkButtonText}>DOWNLOAD ANDROID APP (APK)</Text>
+              <Text style={styles.apkButtonText}>Download Android app (APK)</Text>
             </Pressable>
           ) : null}
           {IS_WEB && APK_URL && IS_IOS_WEB ? (
             <Text style={styles.apkNote}>The downloadable app is Android only.</Text>
           ) : null}
-        </View>
+        </Card>
 
         <View style={styles.footerCard}>
           <Text style={styles.footerTitle}>Need help?</Text>
@@ -137,105 +120,24 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: Spacing.four,
   },
-  card: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 24,
-    padding: Spacing.four,
-    gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
   brandTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#1B4A28',
+    color: Brand.primaryDark,
   },
   brandSubtitle: {
-    color: '#3C6A43',
+    color: Brand.subtitle,
     marginTop: 4,
-    marginBottom: 20,
-    fontSize: 16,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    fontWeight: '600',
-  },
-  input: {
-    height: 48,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E4E8',
-  },
-  passwordInput: {
-    height: 48,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E4E8',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  passwordField: {
-    flex: 1,
-    height: '100%',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#1F7A37',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
     fontSize: 16,
   },
   errorText: {
-    color: '#A12727',
+    color: Brand.error,
     fontWeight: '700',
-  },
-  ghostButton: {
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  ghostButtonText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    marginTop: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#1F7A37',
-    fontWeight: '700',
-    fontSize: 14,
   },
   apkButton: {
     marginTop: 12,
     borderRadius: 14,
-    backgroundColor: '#1B4A28',
+    backgroundColor: Brand.primaryDark,
     paddingVertical: 14,
     alignItems: 'center',
     flexDirection: 'row',
@@ -250,7 +152,7 @@ const styles = StyleSheet.create({
   apkNote: {
     marginTop: 12,
     textAlign: 'center',
-    color: '#6B7280',
+    color: Brand.muted,
     fontSize: 12,
   },
   footerCard: {
@@ -270,7 +172,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   footerLink: {
-    color: '#1F7A37',
+    color: Brand.primary,
     fontWeight: '700',
     marginTop: 10,
   },

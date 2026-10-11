@@ -3,13 +3,14 @@ import { Animated, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimension
 import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Spacing } from '@/constants/theme';
+import { webCursor } from './ui';
 
-const menuItems: { label: string; href: Href; segment: string }[] = [
-  { label: 'Main', href: '/household', segment: 'household' },
-  { label: 'Collection History', href: '/household/history', segment: 'history' },
-  { label: 'Notifications', href: '/household/notifications', segment: 'notifications' },
-  { label: 'Report', href: '/household/report', segment: 'report' },
-  { label: 'My QR Code', href: '/household/qr', segment: 'qr' },
+const menuItems: { label: string; href: Href; segment: string; icon: string }[] = [
+  { label: 'Home', href: '/household', segment: 'household', icon: 'home' },
+  { label: 'Collection History', href: '/household/history', segment: 'history', icon: 'history' },
+  { label: 'Notifications', href: '/household/notifications', segment: 'notifications', icon: 'notifications' },
+  { label: 'Report an Issue', href: '/household/report', segment: 'report', icon: 'report' },
+  { label: 'My QR Code', href: '/household/qr', segment: 'qr', icon: 'qr-code' },
 ];
 
 export default function HouseholdLayout() {
@@ -41,8 +42,14 @@ export default function HouseholdLayout() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {isMobile ? (
       <View style={styles.topBar}>
-        <Pressable style={styles.menuButton} onPress={() => setIsMenuOpen((value) => !value)}>
+        <Pressable
+          style={[webCursor(), styles.menuButton]}
+          onPress={() => setIsMenuOpen((value) => !value)}
+          accessibilityRole="button"
+          accessibilityLabel={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        >
           <MaterialIcons name={isMenuOpen ? 'close' : 'menu'} size={22} color="#FFFFFF" />
         </Pressable>
         <View style={styles.brandBlock}>
@@ -50,6 +57,7 @@ export default function HouseholdLayout() {
           <Text style={styles.headerSubtitle}>Household Portal</Text>
         </View>
       </View>
+      ) : null}
 
       {isMobile && isMenuOpen ? (
         <>
@@ -65,18 +73,27 @@ export default function HouseholdLayout() {
                 <Pressable
                   key={item.segment}
                   style={({ pressed }) => [
+                    webCursor(),
                     styles.navItem,
                     isActive(item.segment) && styles.navItemActive,
                     pressed && styles.pressedItem,
                   ]}
                   onPress={() => handleNavigate(item.href)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  accessibilityState={{ selected: isActive(item.segment) }}
                 >
+                  <MaterialIcons
+                    name={item.icon as never}
+                    size={20}
+                    color={isActive(item.segment) ? '#FFFFFF' : '#D6F3D1'}
+                  />
                   <Text style={styles.navItemText}>{item.label}</Text>
                 </Pressable>
               ))}
 
               <Pressable
-                style={styles.logoutButton}
+                style={[webCursor(), styles.logoutButton]}
                 onPress={() => {
                   setIsMenuOpen(false);
                   router.push('/household/logout');
@@ -99,20 +116,30 @@ export default function HouseholdLayout() {
 
             <View style={styles.menuList}>
               {menuItems.map((item) => (
-                <Link
-                  key={item.segment}
-                  href={item.href}
-                  style={[
-                    styles.navItem,
-                    isActive(item.segment) && styles.navItemActive,
-                  ]}
-                >
-                  {item.label}
+                <Link key={item.segment} href={item.href} asChild>
+                  <Pressable
+                    style={({ pressed }) => [
+                      webCursor(),
+                      styles.navItem,
+                      isActive(item.segment) && styles.navItemActive,
+                      pressed && styles.pressedItem,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.label}
+                    accessibilityState={{ selected: isActive(item.segment) }}
+                  >
+                    <MaterialIcons
+                      name={item.icon as never}
+                      size={20}
+                      color={isActive(item.segment) ? '#FFFFFF' : '#D6F3D1'}
+                    />
+                    <Text style={styles.navItemText}>{item.label}</Text>
+                  </Pressable>
                 </Link>
               ))}
             </View>
 
-            <Pressable style={styles.logoutButton} onPress={() => router.push('/household/logout')}>
+            <Pressable style={[webCursor(), styles.logoutButton]} onPress={() => router.push('/household/logout')}>
               <Text style={styles.logoutText}>Logout</Text>
             </Pressable>
           </View>
@@ -149,23 +176,10 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     borderBottomRightRadius: 32,
   },
-  navPaneMobile: {
-    width: '100%',
-    paddingVertical: Spacing.four,
-    paddingHorizontal: Spacing.four,
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-    borderBottomLeftRadius: 0,
-  },
   topBar: {
     backgroundColor: '#1F7A37',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  brandHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
@@ -196,22 +210,22 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   navItem: {
-    color: '#D6F3D1',
-    fontWeight: '700',
-    fontSize: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     marginTop: Spacing.two,
   },
   navItemText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+    flex: 1,
   },
   navItemActive: {
-    color: '#FFFFFF',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   pressedItem: {
     opacity: 0.8,
@@ -252,11 +266,6 @@ const styles = StyleSheet.create({
     color: '#D6F3D1',
     fontSize: 14,
   },
-  navItemMobile: {
-    width: '100%',
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-  },
   logoutButton: {
     paddingVertical: 14,
     paddingHorizontal: 12,
@@ -264,10 +273,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F2A12',
     borderRadius: 14,
     alignItems: 'center',
-  },
-  logoutButtonMobile: {
-    width: '100%',
-    marginTop: Spacing.three,
   },
   logoutText: {
     color: '#FFFFFF',
@@ -287,10 +292,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 32,
     padding: Spacing.four,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
+    boxShadow: '0px 10px 16px rgba(0,0,0,0.08)',
     elevation: 4,
   },
 });

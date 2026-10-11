@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   container: { padding: Spacing.four },
   card: {
     backgroundColor: '#FFFFFF', borderRadius: 24, padding: Spacing.four, gap: Spacing.three,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 3,
+    boxShadow: '0px 8px 12px rgba(0,0,0,0.05)', elevation: 3,
   },
   title: { fontSize: 24, fontWeight: '800', color: '#1F7A37' },
   subtitle: { color: '#4A4A4A', lineHeight: 20 },

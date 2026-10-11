@@ -1,24 +1,27 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 
 const PUBLIC_PATHS = ['/', '/login'];
 
-function isAuthenticated(): boolean {
-  return typeof window !== 'undefined' && !!window.localStorage.getItem('authToken');
-}
-
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const showSidebar = isAuthenticated() && !PUBLIC_PATHS.includes(pathname);
+  const [mounted, setMounted] = useState(false);
+  const [authed, setAuthed] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    setAuthed(!!window.localStorage.getItem('authToken'));
+  }, [pathname]);
+  const showSidebar = mounted && authed && !PUBLIC_PATHS.includes(pathname);
   const [drawerRequested, setDrawerRequested] = useState(false);
   const mobileOpen = showSidebar && drawerRequested;
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('adminUser');
+    setAuthed(false);
     setDrawerRequested(false);
   };
 

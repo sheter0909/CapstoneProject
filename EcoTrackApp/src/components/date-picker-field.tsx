@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { webCursor } from './ui';
 
 interface DatePickerFieldProps {
   label?: string;
@@ -232,7 +233,7 @@ export default function DatePickerField({
           autoCorrect={false}
         />
         <Pressable
-          style={styles.iconContainer}
+          style={[webCursor(), styles.iconContainer]}
           onPress={openPicker}
           accessibilityLabel="Open calendar date picker"
           accessibilityRole="button"
@@ -255,21 +256,21 @@ export default function DatePickerField({
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Birthdate</Text>
-              <Pressable style={styles.closeIcon} onPress={() => setModalVisible(false)}>
+              <Pressable style={[webCursor(), styles.closeIcon]} onPress={() => setModalVisible(false)}>
                 <MaterialIcons name="close" size={22} color="#666" />
               </Pressable>
             </View>
 
             {/* Month / Year Navigator */}
             <View style={styles.navRow}>
-              <Pressable style={styles.navArrow} onPress={handlePrevMonth}>
+              <Pressable style={[webCursor(), styles.navArrow]} onPress={handlePrevMonth}>
                 <MaterialIcons name="chevron-left" size={26} color="#1F7A37" />
               </Pressable>
 
               <View style={styles.monthYearSelector}>
                 <Text style={styles.monthText}>{MONTH_NAMES[currentMonth]}</Text>
                 <Pressable
-                  style={styles.yearBadge}
+                  style={[webCursor(), styles.yearBadge]}
                   onPress={() => setShowYearPicker((v) => !v)}
                 >
                   <Text style={styles.yearText}>{currentYear}</Text>
@@ -281,7 +282,7 @@ export default function DatePickerField({
                 </Pressable>
               </View>
 
-              <Pressable style={styles.navArrow} onPress={handleNextMonth}>
+              <Pressable style={[webCursor(), styles.navArrow]} onPress={handleNextMonth}>
                 <MaterialIcons name="chevron-right" size={26} color="#1F7A37" />
               </Pressable>
             </View>
@@ -295,6 +296,7 @@ export default function DatePickerField({
                     <Pressable
                       key={y}
                       style={[
+                        webCursor(),
                         styles.yearItem,
                         y === currentYear && styles.yearItemActive,
                       ]}
@@ -341,6 +343,7 @@ export default function DatePickerField({
                       <Pressable
                         key={`day-${day}`}
                         style={[
+                          webCursor(),
                           styles.dayCell,
                           styles.dayButton,
                           isSelected && styles.dayButtonSelected,
@@ -365,7 +368,7 @@ export default function DatePickerField({
             {/* Quick Actions */}
             <View style={styles.modalFooter}>
               <Pressable
-                style={styles.cancelButton}
+                style={[webCursor(), styles.cancelButton]}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -437,10 +440,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+    boxShadow: '0px 10px 20px rgba(0,0,0,0.15)',
     elevation: 8,
   },
   modalHeader: {

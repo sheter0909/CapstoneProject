@@ -17,7 +17,7 @@ export default function ActivityLogPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [filter, setFilter] = useState<'all' | 'success' | 'failed' | 'pending'>('all');
+  
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
@@ -35,7 +35,7 @@ export default function ActivityLogPage() {
       return;
     }
 
-    const query = `?limit=100${filter !== 'all' ? `&status=${encodeURIComponent(filter)}` : ''}`;
+    const query = `?limit=100`;
     void adminApi
       .activityLogs(query)
       .then((result) =>
@@ -52,7 +52,7 @@ export default function ActivityLogPage() {
       )
       .catch(() => setActivities([]))
       .finally(() => setIsLoading(false));
-  }, [router, filter]);
+  }, [router]);
 
   const filteredActivities = activities;
 
@@ -101,52 +101,6 @@ export default function ActivityLogPage() {
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-2">Activity Log</h2>
           <p className="text-gray-600">Monitor all system activities and user actions</p>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <div className="flex gap-4 flex-wrap">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                filter === 'all'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
-            >
-              All Activities
-            </button>
-            <button
-              onClick={() => setFilter('success')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                filter === 'success'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
-            >
-              Success
-            </button>
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                filter === 'pending'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
-            >
-              Pending
-            </button>
-            <button
-              onClick={() => setFilter('failed')}
-              className={`px-4 py-2 rounded-lg font-semibold transition ${
-                filter === 'failed'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
-            >
-              Failed
-            </button>
-          </div>
         </div>
 
         {/* Activities List */}
