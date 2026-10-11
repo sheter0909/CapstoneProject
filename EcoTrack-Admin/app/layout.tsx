@@ -1,6 +1,8 @@
+import React from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/AppShell";
+import ServiceWorkerCleanup from "@/components/ServiceWorkerCleanup";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,6 +18,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EcoTrack Admin Dashboard",
   description: "Admin dashboard for residential waste management",
+  keywords: ["ecotrack", "waste", "monitoring"],
+  authors: [{ name: "EcoTrack Team" }],
 };
 
 export default function RootLayout({
@@ -28,7 +32,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head></head>
       <body className="min-h-full bg-gray-50">
+        <ServiceWorkerCleanup />
         <AppShell>{children}</AppShell>
       </body>
     </html>
