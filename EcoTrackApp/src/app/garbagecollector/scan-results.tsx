@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type TextStyle } from 'react-native';
 import { Spacing } from '@/constants/theme';
-import { CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
+import { ApiError, CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
 import { toWasteTypeLabel } from '@/lib/labels';
 import { safeBack } from '@/lib/navigation';
 
@@ -33,8 +33,21 @@ export default function GarbageCollectorScanResultsScreen() {
         }
       })
       .catch((err) => {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Unable to load household summary.');
+        if (!isMounted) return;
+        // Map by status code, not message text: the backend wording may change
+        // without breaking the UI, and transport failures must never read as
+        // a permissions or credential problem.
+        if (err instanceof ApiError && err.status === 404) {
+          setError('No household found with that ID.');
+        } else if (err instanceof ApiError && err.status === 401) {
+          setError('Your session expired. Please log in again.');
+          router.replace('/garbagecollector/login');
+        } else if (err instanceof ApiError && err.status === 403) {
+          setError('Your account is not allowed to look up households.');
+        } else if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Cannot reach the server. Check your connection.');
         }
       })
       .finally(() => {
@@ -44,12 +57,14 @@ export default function GarbageCollectorScanResultsScreen() {
     return () => {
       isMounted = false;
     };
-  }, [targetId]);
+  }, [router, targetId]);
 
   const name = household?.fullName || `Household ${targetId}`;
   const address = [household?.purok, household?.address].filter(Boolean).join(', ') || 'Not specified';
   const status = household?.status ? household.status.toUpperCase() : 'ACTIVE';
-  const lastVisit = history[0] ? new Date(history[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'None';
+  const lastVisit = history[0] ? new Date(history[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  const { width: screenWidth } = useWindowDimensions();
+  const stackedStats = screenWidth < 340;
   const mostRecent = history[0];
   const [nowMs] = useState(() => Date.now());
   const collectedThisWeek = Boolean(mostRecent && nowMs - new Date(mostRecent.timestamp).getTime() <= 7 * 24 * 60 * 60 * 1000);
@@ -77,18 +92,30 @@ export default function GarbageCollectorScanResultsScreen() {
               <Text style={styles.profileId}>Household ID: {household?.householdId || targetId}</Text>
             </View>
 
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Status</Text>
-                <Text style={styles.summaryValue}>{status}</Text>
+            <View style={[styles.summaryRow, stackedStats && styles.summaryRowStacked]}>
+              <View style={[styles.summaryItem, stackedStats && styles.summaryItemStacked]}>
+                <Text style={styles.summaryLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                  Status
+                </Text>
+                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {status}
+                </Text>
               </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Last Visit</Text>
-                <Text style={styles.summaryValue}>{lastVisit}</Text>
+              <View style={[styles.summaryItem, stackedStats && styles.summaryItemStacked]}>
+                <Text style={styles.summaryLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                  Last Visit
+                </Text>
+                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {lastVisit}
+                </Text>
               </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Not Segregated</Text>
-                <Text style={styles.summaryValue}>{notSegregatedCount}</Text>
+              <View style={[styles.summaryItem, stackedStats && styles.summaryItemStacked]}>
+                <Text style={styles.summaryLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
+                  Not Segregated
+                </Text>
+                <Text style={[styles.summaryValue, styles.noWrap]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                  {notSegregatedCount}
+                </Text>
               </View>
             </View>
 
@@ -139,12 +166,12 @@ export default function GarbageCollectorScanResultsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: Spacing.four,
+    padding: Spacing.three,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: Spacing.four,
+    padding: Spacing.three,
     gap: Spacing.four,
     boxShadow: '0px 8px 12px rgba(0,0,0,0.05)',
     elevation: 3,
@@ -174,24 +201,47 @@ const styles = StyleSheet.create({
   },
   summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: Spacing.four,
+    width: '100%',
+    gap: 8,
+  },
+  summaryRowStacked: {
+    flexDirection: 'column',
   },
   summaryItem: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: '#F7FBF7',
     borderRadius: 18,
-    padding: Spacing.three,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    minHeight: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryItemStacked: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 0,
+    paddingHorizontal: 12,
   },
   summaryLabel: {
     color: '#4A4A4A',
+    fontSize: 11,
     marginBottom: Spacing.one,
+    textAlign: 'center',
   },
   summaryValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1F7A37',
+    textAlign: 'center',
   },
+  noWrap: Platform.select({
+    web: { whiteSpace: 'nowrap', wordBreak: 'normal' } as unknown as TextStyle,
+    default: {},
+  }),
   historyCard: {
     backgroundColor: '#F2F8F2',
     borderRadius: 20,

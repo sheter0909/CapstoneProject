@@ -23,6 +23,15 @@ export const pagination = [
 
 export const idParam = param('id').trim().notEmpty().withMessage('ID parameter is required.');
 
+// Collector household lookup (?householdId=...): IDs are opaque strings —
+// leading zeros are significant, so never coerce to a number here.
+export const householdIdQuery = query('householdId')
+  .trim()
+  .notEmpty()
+  .withMessage('Household ID is required.')
+  .isLength({ max: 64 })
+  .withMessage('Household ID is too long.');
+
 export const login = [
   body('identifier').trim().notEmpty().withMessage('Identifier (Email / ID) is required.'),
   body('password').notEmpty().withMessage('Password is required.'),

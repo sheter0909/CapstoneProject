@@ -5,7 +5,11 @@ import { config } from './config.js';
 import { fail } from './response.js';
 import { prisma } from './db.js';
 
-export type Role = 'admin' | 'household' | 'collector';
+// Single source of truth for role names: JWT creation (auth.ts), route guards
+// (routes/*), and status revalidation below must all use these — never scatter
+// raw role strings, so a typo can't silently lock out (or open up) a portal.
+export const ROLES = { admin: 'admin', household: 'household', collector: 'collector' } as const;
+export type Role = (typeof ROLES)[keyof typeof ROLES];
 type AuthUser = { id: string; role: Role; name?: string };
 
 declare global {

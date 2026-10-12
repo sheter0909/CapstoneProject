@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Spacing } from '@/constants/theme';
@@ -22,10 +22,20 @@ export default function GarbageCollectorQuickScanScreen() {
   const [householdId, setHouseholdId] = useState('');
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   // Synchronous lock: camera fires per-frame, state updates are async and a
   // second scan event can slip through before `scanned` flips.
   const navigatingRef = useRef(false);
+
+  // Reset the navigation lock whenever this screen regains focus so the
+  // submit button is never stuck disabled after returning from results.
+  useFocusEffect(
+    useCallback(() => {
+      navigatingRef.current = false;
+      setLookupBusy(false);
+    }, []),
+  );
 
   const navigateToResults = (targetId: string) => {
     router.push({
@@ -49,9 +59,10 @@ export default function GarbageCollectorQuickScanScreen() {
   };
 
   const handleProceed = () => {
+    if (lookupBusy || navigatingRef.current) return;
     const raw = householdId.trim();
     if (!raw) {
-      setError("You haven't entered a Household ID or scanned a QR code.");
+      setError('Please enter a Household ID.');
       return;
     }
     const targetId = extractHouseholdId(raw);
@@ -60,6 +71,10 @@ export default function GarbageCollectorQuickScanScreen() {
       return;
     }
     setError('');
+    // Latch before navigating: Pressable has no built-in double-tap guard and
+    // repeated pushes would stack duplicate results screens.
+    navigatingRef.current = true;
+    setLookupBusy(true);
     navigateToResults(targetId);
   };
 
@@ -104,8 +119,16 @@ export default function GarbageCollectorQuickScanScreen() {
             />
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={handleProceed}>
-            <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
+          <Pressable
+            style={[styles.primaryButton, lookupBusy && styles.primaryButtonDisabled]}
+            onPress={handleProceed}
+            disabled={lookupBusy}
+          >
+            {lookupBusy ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
+            )}
           </Pressable>
 
           <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
@@ -159,8 +182,16 @@ export default function GarbageCollectorQuickScanScreen() {
           </View>
         ) : null}
 
-        <Pressable style={styles.primaryButton} onPress={handleProceed}>
-          <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
+        <Pressable
+          style={[styles.primaryButton, lookupBusy && styles.primaryButtonDisabled]}
+          onPress={handleProceed}
+          disabled={lookupBusy}
+        >
+          {lookupBusy ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Get Results & Proceed</Text>
+          )}
         </Pressable>
 
         <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
@@ -268,6 +299,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 16,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   backButton: {
     marginTop: Spacing.two,

@@ -2,8 +2,8 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { prisma } from '../db.js';
 import { encryptPasswordDisplay, hashPassword } from '../auth.js';
 import { created, fail, ok } from '../response.js';
-import { requireAuth, validateRequest } from '../middleware.js';
-import { accountFields, idParam, pagination, password } from '../validators.js';
+import { ROLES, requireAuth, validateRequest } from '../middleware.js';
+import { accountFields, householdIdQuery, idParam, pagination, password } from '../validators.js';
 import {
   adminHousehold,
   changeStatus,
@@ -158,14 +158,31 @@ async function getArchivedHouseholds(req: Request, res: Response, next: NextFunc
   }
 }
 
-async function getHouseholdSummary(req: Request, res: Response, next: NextFunction) {
+// Shared collector-safe household lookup: used by BOTH the QR scan flow (which
+// resolves the QR payload to a Household ID) and the manual ID entry flow, so
+// they can never drift onto different endpoints or shapes again.
+// Returns only what a collector needs — never password hashes, passwordDisplay,
+// emails, or birthdates (publicAccount already strips the secrets; the explicit
+// pick below additionally drops private identity fields).
+async function lookupHouseholdForCollector(req: Request, res: Response, next: NextFunction) {
   try {
-    const householdId = String(req.params.id);
+    // Household IDs are strings: never Number() — that would drop leading zeros.
+    const householdId = String(req.query.householdId ?? req.params.id ?? '').trim();
+    if (!householdId) {
+      return fail(res, 422, 'Validation failed.', [{ field: 'householdId', message: 'Household ID is required.' }]);
+    }
     const account = await prisma.household.findUnique({ where: { householdId } });
+    if (!account) return fail(res, 404, 'Household not found.');
     const notSegregatedCount = await prisma.collectionEntry.count({ where: { householdId, segregationStatus: 'not_segregated' } });
     const summaryHistory = await prisma.collectionEntry.findMany({ where: { householdId }, orderBy: { timestamp: 'desc' }, take: 10 });
     return ok(res, {
-      household: account ? publicAccount(account) : null,
+      household: {
+        householdId: account.householdId,
+        fullName: account.fullName,
+        purok: account.purok,
+        address: account.address,
+        status: account.status,
+      },
       history: summaryHistory.map((entry) => withEditable(entry, req.user!.id)),
       notSegregatedCount,
       nextWarningLevel: nextWarningLevelForCount(notSegregatedCount),
@@ -173,6 +190,10 @@ async function getHouseholdSummary(req: Request, res: Response, next: NextFuncti
   } catch (error) {
     next(error);
   }
+}
+
+async function getHouseholdSummary(req: Request, res: Response, next: NextFunction) {
+  return lookupHouseholdForCollector(req, res, next);
 }
 
 async function getHouseholdCollections(req: Request, res: Response, next: NextFunction) {
@@ -203,5 +224,8 @@ householdRoutes.patch('/households/:id/unarchive', requireAuth('admin'), idParam
   changeStatus(req, res, next, prisma.household, 'active', 'Household Restored'),
 );
 householdRoutes.get('/archive/households', requireAuth('admin'), pagination, validateRequest, getArchivedHouseholds);
-householdRoutes.get('/households/:id/summary', requireAuth('collector'), getHouseholdSummary);
+// Manual + QR flows share this query endpoint (collectors and admins only:
+// a household-role token gets 403 here, never household data).
+householdRoutes.get('/collector/households/lookup', requireAuth(ROLES.collector, ROLES.admin), householdIdQuery, validateRequest, lookupHouseholdForCollector);
+householdRoutes.get('/households/:id/summary', requireAuth(ROLES.collector, ROLES.admin), idParam, validateRequest, getHouseholdSummary);
 householdRoutes.get('/households/:id/collections', requireAuth('admin'), getHouseholdCollections);
