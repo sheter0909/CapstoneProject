@@ -1,8 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { prisma } from '../db.js';
 import { ok } from '../response.js';
-import { requireAuth, validateRequest } from '../middleware.js';
-import { pagination } from '../validators.js';
+import { requireAuth } from '../middleware.js';
 import { list, reportByPeriod } from './helpers.js';
 
 export const reportRoutes = Router();

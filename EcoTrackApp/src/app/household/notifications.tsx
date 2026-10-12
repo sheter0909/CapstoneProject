@@ -142,11 +142,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  successText: {
-    color: '#1F7A37',
-    fontWeight: '600',
-    fontSize: 14,
-  },
   notificationItem: {
     backgroundColor: '#F6F9F6',
     borderRadius: 18,
