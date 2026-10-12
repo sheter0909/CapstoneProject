@@ -34,7 +34,20 @@ export async function login(role: Role, identifier: string, rawPassword: string)
   } else {
     account = await prisma.garbageCollector.findFirst({ where: { collectorId: trimmed.toUpperCase() } });
   }
-  if (!account || !(await bcrypt.compare(rawPassword, account.password))) return { error: 'Invalid credentials.' } as const;
+  // Household/collector logins distinguish "unknown account" from "wrong
+  // password" so the app can show a precise message. Admin login deliberately
+  // keeps the single generic response so admin accounts can't be enumerated.
+  if (!account) {
+    if (role === 'admin') return { error: 'Invalid credentials.' } as const;
+    if (role === 'household') {
+      return { error: "We couldn't find an account with that House ID.", code: 'ACCOUNT_NOT_FOUND' } as const;
+    }
+    return { error: "We couldn't find an account with that Collector ID.", code: 'ACCOUNT_NOT_FOUND' } as const;
+  }
+  if (!(await bcrypt.compare(rawPassword, account.password))) {
+    if (role === 'admin') return { error: 'Invalid credentials.' } as const;
+    return { error: 'The password you entered is incorrect.', code: 'WRONG_PASSWORD' } as const;
+  }
   if (account.status === 'archived') return { error: 'This account has been archived.', forbidden: true } as const;
   if (account.status === 'inactive') return { error: 'This account is inactive.', forbidden: true } as const;
   const id = role === 'household'

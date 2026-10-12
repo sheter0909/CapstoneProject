@@ -8,6 +8,6 @@ export function created<T>(res: Response, data: T, message?: string) {
   return res.status(201).json({ success: true, data, ...(message ? { message } : {}) });
 }
 
-export function fail(res: Response, status: number, message: string, errors?: unknown) {
-  return res.status(status).json({ success: false, message, ...(errors ? { errors } : {}) });
+export function fail(res: Response, status: number, message: string, errors?: unknown, code?: string) {
+  return res.status(status).json({ success: false, message, ...(errors ? { errors } : {}), ...(code ? { code } : {}) });
 }

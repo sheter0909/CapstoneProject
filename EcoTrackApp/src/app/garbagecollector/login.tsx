@@ -4,7 +4,18 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import { AppButton, AppTextInput, Card, Field, PasswordField } from '@/components/ui';
-import { useAuth } from '@/context/auth';
+import { useAuth, type LoginResult } from '@/context/auth';
+
+function collectorLoginMessage(result: LoginResult): string {
+  if (result.code === 'WRONG_PASSWORD') return 'The password you entered is incorrect.';
+  if (result.code === 'ACCOUNT_NOT_FOUND') return "We couldn't find an account with that Collector ID.";
+  // Network failures and server errors must never read as a wrong password.
+  if (result.network || (result.status !== undefined && result.status >= 500)) {
+    return 'Something went wrong. Please try again.';
+  }
+  // Other backend messages (e.g. archived/inactive accounts) pass through.
+  return result.error || 'Something went wrong. Please try again.';
+}
 
 export default function GarbageCollectorLoginScreen() {
   const router = useRouter();
@@ -29,7 +40,7 @@ export default function GarbageCollectorLoginScreen() {
       const result = await loginCollector(collectorId, password);
 
       if (!result.success) {
-        setError(result.error ?? 'Invalid Collector ID or password.');
+        setError(collectorLoginMessage(result));
         return;
       }
 
@@ -78,7 +89,7 @@ export default function GarbageCollectorLoginScreen() {
           </Field>
 
           {error ? (
-            <Text style={styles.errorText} role="alert">
+            <Text style={styles.errorText} role="alert" accessibilityLiveRegion="polite">
               {error}
             </Text>
           ) : null}

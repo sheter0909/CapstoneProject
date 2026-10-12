@@ -1,6 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { collectorApi, householdApi, CollectorUser, HouseholdUser, onUnauthorized, setApiToken } from '@/lib/api';
+import { ApiError, clearApiToken, collectorApi, decodeTokenRole, householdApi, CollectorUser, HouseholdUser, LoginErrorCode, onUnauthorized, setApiToken, type ApiPortal } from '@/lib/api';
+
+export type LoginResult = { success: boolean; error?: string; code?: LoginErrorCode; status?: number; network?: boolean };
+
+// Normalizes login failures: machine-readable backend codes are preserved so
+// screens can switch on them; transport failures (backend unreachable, timeouts,
+// unusable 5xx bodies) are flagged as network errors so screens show a safe
+// fallback instead of a misleading credential message.
+function toLoginFailure(error: unknown, fallback: string): LoginResult {
+  if (error instanceof ApiError) {
+    const code = error.code === 'WRONG_PASSWORD' || error.code === 'ACCOUNT_NOT_FOUND' ? error.code : undefined;
+    return { success: false, error: error.message || fallback, code, status: error.status };
+  }
+  return { success: false, network: true };
+}
 
 type AuthContextValue = {
   hydrated: boolean;
@@ -8,7 +22,7 @@ type AuthContextValue = {
   householdAuthenticated: boolean;
   householdRecoveryVerified: boolean;
   householdResetAccountId: string | null;
-  loginHousehold: (householdId: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginHousehold: (householdId: string, password: string) => Promise<LoginResult>;
   verifyHouseholdIdentity: (householdId: string, birthdate: string) => Promise<{ success: boolean; error?: string }>;
   resetHouseholdPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   refreshHouseholdProfile: () => Promise<void>;
@@ -18,7 +32,7 @@ type AuthContextValue = {
   collectorUser: CollectorUser | null;
   collectorRecoveryVerified: boolean;
   collectorResetAccountId: string | null;
-  loginCollector: (collectorId: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginCollector: (collectorId: string, password: string) => Promise<LoginResult>;
   verifyCollectorIdentity: (collectorId: string, birthdate: string) => Promise<boolean>;
   resetCollectorPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   logoutCollector: () => void;
@@ -26,9 +40,21 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const TOKEN_KEY = 'ecotrack.auth.token';
-const HOUSEHOLD_KEY = 'ecotrack.auth.household';
-const COLLECTOR_KEY = 'ecotrack.auth.collector';
+// Separate session per portal: each portal stores and attaches only its own
+// token, so a household JWT can never be sent from a collector screen.
+const HOUSEHOLD_TOKEN_KEY = 'ecotrack.household.token';
+const HOUSEHOLD_PROFILE_KEY = 'ecotrack.household.profile';
+const COLLECTOR_TOKEN_KEY = 'ecotrack.collector.token';
+const COLLECTOR_PROFILE_KEY = 'ecotrack.collector.profile';
+
+// Pre-split keys (one shared TOKEN_KEY for both portals). Read once for
+// migration, then deleted so no stale shared token can survive an update.
+const LEGACY_TOKEN_KEY = 'ecotrack.auth.token';
+const LEGACY_HOUSEHOLD_KEY = 'ecotrack.auth.household';
+const LEGACY_COLLECTOR_KEY = 'ecotrack.auth.collector';
+
+function tokenKey(portal: ApiPortal) { return portal === 'household' ? HOUSEHOLD_TOKEN_KEY : COLLECTOR_TOKEN_KEY; }
+function profileKey(portal: ApiPortal) { return portal === 'household' ? HOUSEHOLD_PROFILE_KEY : COLLECTOR_PROFILE_KEY; }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
@@ -47,34 +73,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function restoreSession() {
       try {
-        const [storedToken, storedHousehold, storedCollector] = await Promise.all([
-          AsyncStorage.getItem(TOKEN_KEY),
-          AsyncStorage.getItem(HOUSEHOLD_KEY),
-          AsyncStorage.getItem(COLLECTOR_KEY),
+        const stored = await Promise.all([
+          AsyncStorage.getItem(HOUSEHOLD_TOKEN_KEY),
+          AsyncStorage.getItem(HOUSEHOLD_PROFILE_KEY),
+          AsyncStorage.getItem(COLLECTOR_TOKEN_KEY),
+          AsyncStorage.getItem(COLLECTOR_PROFILE_KEY),
+          AsyncStorage.getItem(LEGACY_TOKEN_KEY),
+          AsyncStorage.getItem(LEGACY_HOUSEHOLD_KEY),
+          AsyncStorage.getItem(LEGACY_COLLECTOR_KEY),
         ]);
+        let [householdToken, householdProfileRaw, collectorToken, collectorProfileRaw, legacyToken, legacyHousehold, legacyCollector] = stored;
 
-        if (storedToken) setApiToken(storedToken);
-        if (storedHousehold && storedCollector) {
-          // Legacy poisoned state (both portals stored under one shared token):
-          // the token can only belong to one role, so force a fresh login.
-          setApiToken(null);
+        // One-time migration from the shared-token layout: adopt the legacy
+        // token under the portal matching its decoded role (filling only empty
+        // slots), carry over legacy profiles the same way, then wipe every
+        // legacy key so the stale shared token can never be reused.
+        if (legacyToken || legacyHousehold || legacyCollector) {
+          const legacyRole = legacyToken ? decodeTokenRole(legacyToken) : null;
+          if (legacyToken && legacyRole === 'household' && !householdToken) householdToken = legacyToken;
+          if (legacyToken && legacyRole === 'collector' && !collectorToken) collectorToken = legacyToken;
+          if (legacyHousehold && !householdProfileRaw) householdProfileRaw = legacyHousehold;
+          if (legacyCollector && !collectorProfileRaw) collectorProfileRaw = legacyCollector;
           await Promise.all([
-            AsyncStorage.removeItem(TOKEN_KEY),
-            AsyncStorage.removeItem(HOUSEHOLD_KEY),
-            AsyncStorage.removeItem(COLLECTOR_KEY),
+            AsyncStorage.removeItem(LEGACY_TOKEN_KEY),
+            AsyncStorage.removeItem(LEGACY_HOUSEHOLD_KEY),
+            AsyncStorage.removeItem(LEGACY_COLLECTOR_KEY),
           ]);
-        } else if (storedHousehold) {
-          setHouseholdUser(JSON.parse(storedHousehold) as HouseholdUser);
-          setHouseholdAuthenticated(true);
-        } else if (storedCollector) {
-          setCollectorUser(JSON.parse(storedCollector) as CollectorUser);
-          setCollectorAuthenticated(true);
+        }
+
+        // Role-guard every restored token: a token whose role doesn't match its
+        // portal slot is discarded (portal shows its login screen) instead of
+        // being attached to API calls that would 403.
+        const portals: { portal: ApiPortal; token: string | null; profileRaw: string | null }[] = [
+          { portal: 'household', token: householdToken, profileRaw: householdProfileRaw },
+          { portal: 'collector', token: collectorToken, profileRaw: collectorProfileRaw },
+        ];
+        for (const { portal, token, profileRaw } of portals) {
+          if (!token || decodeTokenRole(token) !== portal) {
+            if (token) {
+              await Promise.all([AsyncStorage.removeItem(tokenKey(portal)), AsyncStorage.removeItem(profileKey(portal))]);
+            }
+            continue;
+          }
+          setApiToken(portal, token);
+          await AsyncStorage.setItem(tokenKey(portal), token);
+          if (profileRaw) await AsyncStorage.setItem(profileKey(portal), profileRaw);
+          if (portal === 'household') {
+            setHouseholdUser(JSON.parse(profileRaw ?? 'null') as HouseholdUser | null);
+            setHouseholdAuthenticated(true);
+          } else {
+            setCollectorUser(JSON.parse(profileRaw ?? 'null') as CollectorUser | null);
+            setCollectorAuthenticated(true);
+          }
         }
       } catch {
         await Promise.all([
-          AsyncStorage.removeItem(TOKEN_KEY),
-          AsyncStorage.removeItem(HOUSEHOLD_KEY),
-          AsyncStorage.removeItem(COLLECTOR_KEY),
+          AsyncStorage.removeItem(HOUSEHOLD_TOKEN_KEY),
+          AsyncStorage.removeItem(HOUSEHOLD_PROFILE_KEY),
+          AsyncStorage.removeItem(COLLECTOR_TOKEN_KEY),
+          AsyncStorage.removeItem(COLLECTOR_PROFILE_KEY),
+          AsyncStorage.removeItem(LEGACY_TOKEN_KEY),
+          AsyncStorage.removeItem(LEGACY_HOUSEHOLD_KEY),
+          AsyncStorage.removeItem(LEGACY_COLLECTOR_KEY),
         ]);
       } finally {
         setHydrated(true);
@@ -87,22 +147,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginHousehold = async (householdId: string, password: string) => {
     try {
       const result = await householdApi.login(householdId.trim(), password);
-      setApiToken(result.token);
-      // Single active session: a household login invalidates any collector session
-      // sharing this device, so the stored token always matches the active portal.
-      setCollectorAuthenticated(false);
-      setCollectorUser(null);
+      // Independent session: the collector session (if any) is left untouched,
+      // and only the household token is stored/attached from here on.
+      setApiToken('household', result.token);
       await Promise.all([
-        AsyncStorage.setItem(TOKEN_KEY, result.token),
-        AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(result.account)),
-        AsyncStorage.removeItem(COLLECTOR_KEY),
+        AsyncStorage.setItem(HOUSEHOLD_TOKEN_KEY, result.token),
+        AsyncStorage.setItem(HOUSEHOLD_PROFILE_KEY, JSON.stringify(result.account)),
       ]);
 
       try {
         const profile = await householdApi.profile();
         if (profile?.fullName && profile.householdId) {
           setHouseholdUser(profile);
-          await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
+          await AsyncStorage.setItem(HOUSEHOLD_PROFILE_KEY, JSON.stringify(profile));
         } else {
           setHouseholdUser(result.account);
         }
@@ -112,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setHouseholdAuthenticated(true);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Invalid House ID or password.' };
+      return toLoginFailure(error, 'Invalid House ID or password.');
     }
   };
 
@@ -121,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await householdApi.profile();
       if (profile?.fullName && profile.householdId) {
         setHouseholdUser(profile);
-        await AsyncStorage.setItem(HOUSEHOLD_KEY, JSON.stringify(profile));
+        await AsyncStorage.setItem(HOUSEHOLD_PROFILE_KEY, JSON.stringify(profile));
       }
     } catch {
       // ignore
@@ -155,34 +212,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [householdResetToken]);
 
   const logoutHousehold = useCallback(() => {
+    // Clears only the household session: a collector session on this device
+    // stays signed in (separate sessions per portal).
     setHouseholdAuthenticated(false);
     setHouseholdUser(null);
-    setApiToken(null);
+    clearApiToken('household');
     void Promise.all([
-      AsyncStorage.removeItem(TOKEN_KEY),
-      AsyncStorage.removeItem(HOUSEHOLD_KEY),
-      AsyncStorage.removeItem(COLLECTOR_KEY),
+      AsyncStorage.removeItem(HOUSEHOLD_TOKEN_KEY),
+      AsyncStorage.removeItem(HOUSEHOLD_PROFILE_KEY),
     ]).catch(() => undefined);
   }, []);
 
   const loginCollector = async (collectorId: string, password: string) => {
     try {
       const result = await collectorApi.login(collectorId.trim(), password);
-      setApiToken(result.token);
-      // Single active session: a collector login invalidates any household session
-      // sharing this device, so the stored token always matches the active portal.
-      setHouseholdAuthenticated(false);
-      setHouseholdUser(null);
+      // Independent session: the household session (if any) is left untouched,
+      // and only the collector token is stored/attached from here on.
+      setApiToken('collector', result.token);
       await Promise.all([
-        AsyncStorage.setItem(TOKEN_KEY, result.token),
-        AsyncStorage.setItem(COLLECTOR_KEY, JSON.stringify(result.account)),
-        AsyncStorage.removeItem(HOUSEHOLD_KEY),
+        AsyncStorage.setItem(COLLECTOR_TOKEN_KEY, result.token),
+        AsyncStorage.setItem(COLLECTOR_PROFILE_KEY, JSON.stringify(result.account)),
       ]);
       setCollectorUser(result.account);
       setCollectorAuthenticated(true);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Invalid Collector ID or Password.' };
+      return toLoginFailure(error, 'Invalid Collector ID or Password.');
     }
   };
 
@@ -216,22 +271,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [collectorResetToken]);
 
   const logoutCollector = useCallback(() => {
+    // Clears only the collector session: a household session on this device
+    // stays signed in (separate sessions per portal).
     setCollectorAuthenticated(false);
     setCollectorUser(null);
-    setApiToken(null);
+    clearApiToken('collector');
     void Promise.all([
-      AsyncStorage.removeItem(TOKEN_KEY),
-      AsyncStorage.removeItem(HOUSEHOLD_KEY),
-      AsyncStorage.removeItem(COLLECTOR_KEY),
+      AsyncStorage.removeItem(COLLECTOR_TOKEN_KEY),
+      AsyncStorage.removeItem(COLLECTOR_PROFILE_KEY),
     ]).catch(() => undefined);
   }, []);
 
-  // Any 401 from the API means the token is expired/revoked: drop both
-  // portals' sessions so the guards redirect to login instead of lingering.
+  // A 401 carries the portal whose token failed: only that portal's session is
+  // dropped, so one expired token can't sign the other portal out. The portal
+  // guards then redirect to that portal's login screen.
   useEffect(() => {
-    onUnauthorized(() => {
-      logoutHousehold();
-      logoutCollector();
+    onUnauthorized((portal) => {
+      if (!portal || portal === 'household') logoutHousehold();
+      if (!portal || portal === 'collector') logoutCollector();
     });
     return () => onUnauthorized(null);
   }, [logoutHousehold, logoutCollector]);

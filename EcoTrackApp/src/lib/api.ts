@@ -10,7 +10,9 @@ function logApiBaseOnce() {
 }
 const REQUEST_TIMEOUT_MS = 15_000;
 
-export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown };
+export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown; code?: string };
+
+export type LoginErrorCode = 'WRONG_PASSWORD' | 'ACCOUNT_NOT_FOUND';
 
 export type FieldError = {
   field: string;
@@ -20,12 +22,14 @@ export type FieldError = {
 export class ApiError extends Error {
   status: number;
   errors?: FieldError[];
+  code?: string;
 
-  constructor(message: string, status: number, errors?: FieldError[]) {
+  constructor(message: string, status: number, errors?: FieldError[], code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.errors = errors;
+    this.code = code;
   }
 }
 
@@ -118,8 +122,11 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+export type ApiRequestOptions = RequestInit & { portal?: ApiPortal };
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const method = options.method ?? 'GET';
+  const portal = options.portal;
   let lastError: Error | null = null;
   logApiBaseOnce();
 
@@ -131,7 +138,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       response = await fetch(`${API_URL}${path}`, {
         ...options,
         signal: options.signal ?? controller.signal,
-        headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader() },
+        headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader(portal) },
       });
     } catch {
       lastError = new Error(`Unable to connect to backend server at ${API_URL}. Please make sure the backend is running.`);
@@ -157,14 +164,14 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     // Client errors (4xx) are final — do not retry.
     if (response.status >= 400 && response.status < 500) {
       const message = fieldErrors?.[0]?.message ?? payload?.message ?? `API request failed (${response.status} ${method} ${API_URL}${path})`;
-      if (response.status === 401) unauthorizedHandler?.();
-      throw new ApiError(message, response.status, fieldErrors);
+      if (response.status === 401) unauthorizedHandler?.(portal);
+      throw new ApiError(message, response.status, fieldErrors, payload?.code);
     }
 
     // The backend answered with an explicit error — final, do not retry.
     if (payload?.message) {
       const message = fieldErrors?.[0]?.message ?? payload.message;
-      throw new ApiError(message, response.status, fieldErrors);
+      throw new ApiError(message, response.status, fieldErrors, payload?.code);
     }
 
     // No usable message (e.g. a proxy/idle-server HTML page): transient, retry.
@@ -182,36 +189,80 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   throw lastError ?? new Error('API request failed.');
 }
 
-let token: string | null = null;
-export function setApiToken(value: string | null) { token = value; }
-function authHeader(): Record<string, string> { return token ? { Authorization: `Bearer ${token}` } : {}; }
+// One token slot per portal: a household JWT must never be attached to a
+// collector request (or vice versa), even though both portals share one origin
+// and one AsyncStorage on web.
+export type ApiPortal = 'household' | 'collector';
 
-// Central 401 hook: the auth context registers a logout here so an expired or
-// revoked token can't leave the app in a fake-authenticated state (every
-// subsequent call would 401 while the guards still pass).
-let unauthorizedHandler: (() => void) | null = null;
-export function onUnauthorized(handler: (() => void) | null) { unauthorizedHandler = handler; }
+const portalTokens: Record<ApiPortal, string | null> = { household: null, collector: null };
+
+function base64UrlDecode(input: string): string {
+  const padded = input.replace(/-/g, '+').replace(/_/g, '/');
+  const padLength = (4 - (padded.length % 4)) % 4;
+  return atob(padded + '='.repeat(padLength));
+}
+
+// Reads the `role` claim without verifying (verification stays server-side).
+// Returns null for malformed tokens or non-portal roles (e.g. admin).
+export function decodeTokenRole(token: string): ApiPortal | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(base64UrlDecode(parts[1])) as { role?: unknown };
+    return payload.role === 'household' || payload.role === 'collector' ? payload.role : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setApiToken(portal: ApiPortal, value: string | null) {
+  // Defense in depth: refuse to store a token whose role belongs to the other
+  // portal, so a mix-up at the call site can never leak across portals.
+  if (value && decodeTokenRole(value) !== null && decodeTokenRole(value) !== portal) return;
+  portalTokens[portal] = value;
+}
+export function clearApiToken(portal: ApiPortal) { portalTokens[portal] = null; }
+function authHeader(portal: ApiPortal | undefined): Record<string, string> {
+  const token = portal ? portalTokens[portal] : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// Central 401 hook: the auth context registers a per-portal logout here so an
+// expired or revoked token can't leave a portal in a fake-authenticated state.
+// Only the portal whose token failed is logged out; the other portal's session
+// is left untouched.
+let unauthorizedHandler: ((portal: ApiPortal | undefined) => void) | null = null;
+export function onUnauthorized(handler: ((portal: ApiPortal | undefined) => void) | null) { unauthorizedHandler = handler; }
+
+// Portal-scoped request helpers: every call through householdApi attaches only
+// the household token, every call through collectorApi only the collector token.
+function householdRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return apiRequest<T>(path, { ...options, portal: 'household' });
+}
+function collectorRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return apiRequest<T>(path, { ...options, portal: 'collector' });
+}
 
 export const householdApi = {
   login: (identifier: string, password: string) =>
-    apiRequest<{ token: string; account: HouseholdUser }>('/auth/household/login', {
+    householdRequest<{ token: string; account: HouseholdUser }>('/auth/household/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),
     }),
-  profile: () => apiRequest<HouseholdUser>('/households/me'),
-  history: () => apiRequest<CollectionHistoryItem[]>('/households/me/history'),
-  notifications: () => apiRequest<NotificationItem[]>('/households/me/notifications'),
+  profile: () => householdRequest<HouseholdUser>('/households/me'),
+  history: () => householdRequest<CollectionHistoryItem[]>('/households/me/history'),
+  notifications: () => householdRequest<NotificationItem[]>('/households/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>
-    apiRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+    householdRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
   markNotificationRead: (id: string) =>
-    apiRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+    householdRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
   forgotPassword: (identifier: string, birthdate: string) =>
-    apiRequest<{ resetToken: string; accountId: string }>('/auth/household/forgot-password', {
+    householdRequest<{ resetToken: string; accountId: string }>('/auth/household/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ identifier, birthdate }),
     }),
   resetPassword: (resetToken: string, password: string) =>
-    apiRequest<null>('/auth/household/reset-password', {
+    householdRequest<null>('/auth/household/reset-password', {
       method: 'POST',
       body: JSON.stringify({ resetToken, password }),
     }),
@@ -219,36 +270,39 @@ export const householdApi = {
 
 export const collectorApi = {
   login: (identifier: string, password: string) =>
-    apiRequest<{ token: string; account: CollectorUser }>('/auth/collector/login', {
+    collectorRequest<{ token: string; account: CollectorUser }>('/auth/collector/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),
     }),
   forgotPassword: (identifier: string, birthdate: string) =>
-    apiRequest<{ resetToken: string }>('/auth/collector/forgot-password', {
+    collectorRequest<{ resetToken: string }>('/auth/collector/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ identifier, birthdate }),
     }),
   resetPassword: (resetToken: string, password: string) =>
-    apiRequest<null>('/auth/collector/reset-password', {
+    collectorRequest<null>('/auth/collector/reset-password', {
       method: 'POST',
       body: JSON.stringify({ resetToken, password }),
     }),
+  // Shared by the QR scan flow and the manual Household ID flow: one endpoint,
+  // one shape. The ID stays a string end-to-end — never Number() it, or
+  // leading zeros ("011704") would be destroyed before the request is sent.
   householdSummary: (id: string) =>
-    apiRequest<HouseholdSummary>(
-      `/households/${encodeURIComponent(id)}/summary`
+    collectorRequest<HouseholdSummary>(
+      `/collector/households/lookup?householdId=${encodeURIComponent(id.trim())}`
     ),
   submitCollection: (body: unknown) =>
-    apiRequest<CollectionHistoryItem>('/collections', { method: 'POST', body: JSON.stringify(body) }),
+    collectorRequest<CollectionHistoryItem>('/collections', { method: 'POST', body: JSON.stringify(body) }),
   updateCollection: (id: string, body: unknown) =>
-    apiRequest<CollectionHistoryItem>(`/collections/${encodeURIComponent(id)}`, {
+    collectorRequest<CollectionHistoryItem>(`/collections/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
-  activityLogs: () => apiRequest<{ items: CollectionHistoryItem[]; total: number; page: number; totalPages: number }>('/collectors/me/activity-logs'),
-  reports: () => apiRequest<{ _id: string; totalKg: number; entries: number }[]>('/collectors/me/reports'),
-  notifications: () => apiRequest<NotificationItem[]>('/collectors/me/notifications'),
+  activityLogs: () => collectorRequest<{ items: CollectionHistoryItem[]; total: number; page: number; totalPages: number }>('/collectors/me/activity-logs'),
+  reports: () => collectorRequest<{ _id: string; totalKg: number; entries: number }[]>('/collectors/me/reports'),
+  notifications: () => collectorRequest<NotificationItem[]>('/collectors/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>
-    apiRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+    collectorRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
   markNotificationRead: (id: string) =>
-    apiRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+    collectorRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
 };

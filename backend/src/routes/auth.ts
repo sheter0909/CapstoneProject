@@ -21,7 +21,13 @@ for (const role of ['admin', 'household', 'collector'] as const) {
       try {
         const result = await login(role, String(req.body.identifier), String(req.body.password));
         if ('error' in result) {
-          return fail(res, 'forbidden' in result && result.forbidden ? 403 : 401, result.error ?? 'Invalid credentials.');
+          return fail(
+            res,
+            'forbidden' in result && result.forbidden ? 403 : 401,
+            result.error ?? 'Invalid credentials.',
+            undefined,
+            'code' in result ? result.code : undefined,
+          );
         }
         return ok(res, result, 'Login successful.');
       } catch (error) {

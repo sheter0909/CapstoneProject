@@ -5,7 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import { AppButton, AppTextInput, Card, Field, PasswordField } from '@/components/ui';
-import { useAuth } from '@/context/auth';
+import { useAuth, type LoginResult } from '@/context/auth';
 
 const APK_URL: string = process.env.EXPO_PUBLIC_APK_URL ?? '';
 const IS_WEB: boolean = Platform.OS === 'web';
@@ -15,6 +15,17 @@ const IS_IOS_WEB: boolean =
   typeof navigator !== 'undefined' &&
   (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+function householdLoginMessage(result: LoginResult): string {
+  if (result.code === 'WRONG_PASSWORD') return 'The password you entered is incorrect.';
+  if (result.code === 'ACCOUNT_NOT_FOUND') return "We couldn't find an account with that House ID.";
+  // Network failures and server errors must never read as a wrong password.
+  if (result.network || (result.status !== undefined && result.status >= 500)) {
+    return 'Something went wrong. Please try again.';
+  }
+  // Other backend messages (e.g. archived/inactive accounts) pass through.
+  return result.error || 'Something went wrong. Please try again.';
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -38,7 +49,7 @@ export default function LoginScreen() {
       router.push('/household');
 
     } else {
-      setError(result.error ?? 'Invalid House ID or password.');
+      setError(householdLoginMessage(result));
     }
   };
 
@@ -77,7 +88,7 @@ export default function LoginScreen() {
           </Field>
 
           {error ? (
-            <Text style={styles.errorText} role="alert">
+            <Text style={styles.errorText} role="alert" accessibilityLiveRegion="polite">
               {error}
             </Text>
           ) : null}
