@@ -648,13 +648,12 @@ export default function HouseholdsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed text-sm text-gray-600">
                   <colgroup>
-                    <col className="w-[13%]" />
-                    <col className="w-[20%]" />
-                    <col className="w-[14%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[11%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[23%]" />
                     <col className="w-[16%]" />
                     <col className="w-[14%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[19%]" />
                   </colgroup>
                   <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-[0.2em] text-gray-500">
                     <tr>
@@ -664,7 +663,6 @@ export default function HouseholdsPage() {
                       <th className="break-words px-2 py-3 sm:px-3">Status</th>
                       <th className="break-words px-2 py-3 sm:px-3">Violations</th>
                       <th className="break-words px-2 py-3 sm:px-3">Last Collection</th>
-                      <th className="break-words px-2 py-3 sm:px-3">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -722,18 +720,6 @@ export default function HouseholdsPage() {
                           </span>
                         </td>
                         <td className="break-words px-2 py-4 text-sm text-gray-800 sm:px-3">{new Date(household.joinDate).toLocaleDateString()}</td>
-                        <td className="px-2 py-4 sm:px-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedHousehold(household);
-                              setShowQR(false);
-                            }}
-                            className="inline-flex items-center rounded-full border border-green-200 px-3 py-1.5 text-sm font-semibold text-green-700 transition hover:bg-green-50"
-                          >
-                            View
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>

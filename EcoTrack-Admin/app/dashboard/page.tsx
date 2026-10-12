@@ -219,12 +219,24 @@ export default function DashboardPage() {
                           <th className="px-4 py-3">Purok</th>
                           <th className="px-4 py-3">Status</th>
                           <th className="px-4 py-3">Joined</th>
-                          <th className="px-4 py-3">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {recentHouseholds.map((household, index) => (
-                          <tr key={household.id} className={`transition hover:bg-green-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}`}>
+                          <tr
+                            key={household.id}
+                            role="link"
+                            tabIndex={0}
+                            aria-label={`View ${household.name}`}
+                            onClick={() => router.push('/households')}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                router.push('/households');
+                              }
+                            }}
+                            className={`cursor-pointer transition hover:bg-green-50/60 ${index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}`}
+                          >
                             <td className="px-4 py-4 text-base font-semibold text-gray-900">{household.name}</td>
                             <td className="px-4 py-4 text-base">{household.purok}</td>
                             <td className="px-4 py-4">
@@ -233,14 +245,6 @@ export default function DashboardPage() {
                               </StatusBadge>
                             </td>
                             <td className="px-4 py-4 text-base">{new Date(household.joinDate).toLocaleDateString()}</td>
-                            <td className="px-4 py-4">
-                              <Link
-                                href="/households"
-                                className="inline-flex items-center rounded-full border border-green-200 px-3 py-1.5 text-sm font-semibold text-green-700 transition hover:bg-green-50"
-                              >
-                                View
-                              </Link>
-                            </td>
                           </tr>
                         ))}
                       </tbody>

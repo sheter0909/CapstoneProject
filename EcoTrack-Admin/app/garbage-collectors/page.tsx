@@ -602,12 +602,26 @@ export default function GarbageCollectorsPage() {
                       <th className="px-4 py-3 sm:px-6">Assigned Area</th>
                       <th className="px-4 py-3 sm:px-6">Status</th>
                       <th className="px-4 py-3 sm:px-6">Join Date</th>
-                      <th className="px-4 py-3 sm:px-6">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCollectors.map((collector, index) => (
-                      <tr key={collector.id} className={index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}>
+                      <tr
+                        key={collector.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View ${collector.name}`}
+                        onClick={() => {
+                          setSelectedCollector(collector);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedCollector(collector);
+                          }
+                        }}
+                        className={`cursor-pointer transition hover:bg-green-100/60 ${index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}`}
+                      >
                         <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">{collector.id}</td>
                         <td className="px-4 py-4 text-sm font-semibold text-gray-900 sm:px-6">{collector.name}</td>
                         <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{collector.zone}</td>
@@ -625,16 +639,6 @@ export default function GarbageCollectorsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{new Date(collector.joinDate).toLocaleDateString()}</td>
-                        <td className="px-4 py-4 sm:px-6">
-                          <button
-                            onClick={() => {
-                              setSelectedCollector(collector);
-                            }}
-                            className="inline-flex items-center rounded-full border border-green-200 px-3 py-1.5 text-sm font-semibold text-green-700 transition hover:bg-green-50"
-                          >
-                            View
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>
