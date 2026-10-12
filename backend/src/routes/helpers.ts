@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../db.js';
 import { fail, ok } from '../response.js';
-import type { AccountStatus, GarbageCollector, Household, Prisma } from '../generated/prisma/client.js';
+import type { AccountStatus, GarbageCollector, Household } from '../generated/prisma/client.js';
 
 export const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: 'draft-8', message: { success: false, message: 'Too many attempts. Try again later.' } });
 export const resetTokens = new Map<string, { role: 'household' | 'collector'; accountId: string; expires: number }>();
