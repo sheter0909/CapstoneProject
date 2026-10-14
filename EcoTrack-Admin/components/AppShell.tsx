@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
+import { adminApi } from '../lib/api';
 
 const PUBLIC_PATHS = ['/', '/login'];
 
@@ -12,7 +13,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState(false);
   useEffect(() => {
     setMounted(true);
-    setAuthed(!!window.localStorage.getItem('authToken'));
+    const token = window.localStorage.getItem('authToken');
+    setAuthed(!!token);
+    // Fire a background health ping on every navigation when authed so the
+    // Render free-tier backend is warm before the user opens Reports.
+    if (token) void adminApi.health();
   }, [pathname]);
   const showSidebar = mounted && authed && !PUBLIC_PATHS.includes(pathname);
   const [drawerRequested, setDrawerRequested] = useState(false);

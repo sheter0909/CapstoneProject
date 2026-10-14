@@ -2,9 +2,11 @@ const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'https://capstonepro
 const API_URL = configuredApiUrl.replace(/\/+$/, '').endsWith('/api')
   ? configuredApiUrl.replace(/\/+$/, '')
   : `${configuredApiUrl.replace(/\/+$/, '')}/api`;
-const REQUEST_TIMEOUT_MS = 10_000;
-const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+const REQUEST_TIMEOUT_MS = 60_000;
+const RETRY_DELAYS_MS = [3_000, 3_000, 3_000];
 const MAX_RETRIES = RETRY_DELAYS_MS.length;
+// 503 = network/fetch failure; 502/504 = Render cold-start proxy errors.
+const RETRIABLE_STATUSES = new Set([502, 503, 504]);
 const CONNECT_ERROR_STATUS = 503;
 
 export interface FieldError {
@@ -172,7 +174,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
       const apiError = error instanceof ApiError ? error : new ApiError('Unexpected error.', CONNECT_ERROR_STATUS);
 
       // Validation, auth, and other server responses are final — do not retry.
-      if (apiError.status !== CONNECT_ERROR_STATUS) throw error;
+      if (!RETRIABLE_STATUSES.has(apiError.status)) throw error;
 
       if (attempt >= MAX_RETRIES) {
         setConnectingState(idleState());
@@ -225,4 +227,5 @@ export const adminApi = {
   sendNotification: (body: { title: string; message: string; recipientType: NotificationRecipientType; householdId?: string; collectorId?: string; level?: string }) =>
     apiRequest<AdminNotification>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
   markNotificationRead: (id: string) => apiRequest<AdminNotification>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+  health: () => fetch(`${API_URL}/health`).then(() => undefined).catch(() => undefined),
 };

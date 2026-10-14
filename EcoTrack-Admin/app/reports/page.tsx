@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi, type CollectionAdminRecord } from '../../lib/api';
 import type {
   ReportData,
-  SummaryRow,
   WeeklyCollectionRow,
   WasteDistributionRow,
   MonthlyPerformanceRow,
@@ -13,45 +12,6 @@ import type {
   CollectionExportRow,
   ComplianceExportRow,
 } from '../../lib/reportExport';
-
-const INITIAL_SUMMARY: SummaryRow = {
-  totalHouseholds: 156,
-  householdsDelta: '+12 this month',
-  activeCollectors: 28,
-  collectorsDelta: '+3 this month',
-  wasteCollectedKg: 2400,
-  wasteDelta: '+18% this month',
-  recycledRate: 94,
-  recycledDelta: '+2% this month',
-};
-
-const INITIAL_WEEKLY: WeeklyCollectionRow[] = [
-  { day: 'Monday', kg: 240 },
-  { day: 'Tuesday', kg: 310 },
-  { day: 'Wednesday', kg: 185 },
-  { day: 'Thursday', kg: 275 },
-  { day: 'Friday', kg: 225 },
-];
-
-const INITIAL_DISTRIBUTION: WasteDistributionRow[] = [
-  { type: 'Recyclable', percent: 45 },
-  { type: 'Organic', percent: 30 },
-  { type: 'Plastic', percent: 15 },
-  { type: 'Other', percent: 10 },
-];
-
-const INITIAL_MONTHLY: MonthlyPerformanceRow[] = [
-  { month: 'July 2024', totalKg: 2240, householdsActive: 144, recycledRate: '92%', trend: '↑ 8%' },
-  { month: 'June 2024', totalKg: 2075, householdsActive: 138, recycledRate: '88%', trend: '↑ 5%' },
-  { month: 'May 2024', totalKg: 1976, householdsActive: 132, recycledRate: '85%', trend: '↑ 12%' },
-];
-
-const INITIAL_REPORT: ReportData = {
-  summary: INITIAL_SUMMARY,
-  weeklyCollection: INITIAL_WEEKLY,
-  wasteDistribution: INITIAL_DISTRIBUTION,
-  monthlyPerformance: INITIAL_MONTHLY,
-};
 
 interface SummaryPayload {
   totalHouseholds: number;
@@ -87,12 +47,12 @@ function toWasteTypeLabel(raw: string): string {
   return raw;
 }
 
-function computeWasteDelta(monthly: PeriodPayload[], fallback: string): string {
+function computePercentDelta(monthly: PeriodPayload[]): string {
   const sorted = [...monthly].sort((a, b) => a._id.localeCompare(b._id));
-  if (sorted.length < 2) return fallback;
+  if (sorted.length < 2) return '';
   const latest = Number(sorted[sorted.length - 1].totalKg);
   const previous = Number(sorted[sorted.length - 2].totalKg);
-  if (!previous) return fallback;
+  if (!previous) return '';
   const change = ((latest - previous) / previous) * 100;
   const sign = change >= 0 ? '+' : '';
   return `${sign}${change.toFixed(0)}% this month`;
@@ -103,7 +63,6 @@ function buildReportData(
   weekly: PeriodPayload[],
   distribution: DistributionPayload[],
   monthly: PeriodPayload[],
-  fallback: ReportData,
 ): ReportData {
   const recentDays = [...weekly]
     .sort((a, b) => a._id.localeCompare(b._id))
@@ -122,28 +81,26 @@ function buildReportData(
     .sort((a, b) => a._id.localeCompare(b._id))
     .slice(-12)
     .reverse()
-    .map(({ _id, totalKg }) => {
-      const label = toMonthLabel(_id);
-      const prev = fallback.monthlyPerformance.find((row) => row.month === label);
-      return {
-        month: label,
-        totalKg: Number(totalKg),
-        householdsActive: prev?.householdsActive ?? '—',
-        recycledRate: prev?.recycledRate ?? '—',
-        trend: prev?.trend ?? '—',
-      };
-    });
+    .map(({ _id, totalKg }) => ({
+      month: toMonthLabel(_id),
+      totalKg: Number(totalKg),
+      householdsActive: '—',
+      recycledRate: '—',
+      trend: '—',
+    }));
+
+  const wasteDelta = computePercentDelta(monthly);
 
   return {
     summary: {
       totalHouseholds: summary.totalHouseholds,
-      householdsDelta: fallback.summary.householdsDelta,
+      householdsDelta: '',
       activeCollectors: summary.activeCollectors,
-      collectorsDelta: fallback.summary.collectorsDelta,
+      collectorsDelta: '',
       wasteCollectedKg: summary.wasteCollected,
-      wasteDelta: computeWasteDelta(monthly, fallback.summary.wasteDelta),
+      wasteDelta,
       recycledRate: Math.round(summary.recycledRate * 10) / 10,
-      recycledDelta: fallback.summary.recycledDelta,
+      recycledDelta: '',
     },
     weeklyCollection: recentDays,
     wasteDistribution: wasteTypes,
@@ -156,9 +113,8 @@ function formatKg(kg: number): string {
   return kg.toLocaleString();
 }
 
-function weekProgressPercent(kg: number): number {
-  const max = Math.max(...INITIAL_WEEKLY.map((row) => row.kg), kg, 1);
-  return Math.max(8, Math.min(100, Math.round((kg / max) * 100)));
+function weekProgressPercent(kg: number, maxKg: number): number {
+  return Math.max(8, Math.min(100, Math.round((kg / Math.max(maxKg, 1)) * 100)));
 }
 
 type ReportPeriod = 'weekly' | 'monthly' | 'yearly';
@@ -182,13 +138,14 @@ function startOfWeek(dateStr: string): Date {
   return date;
 }
 
+type FetchStatus = 'loading' | 'ok' | 'error';
+
 export default function ReportsPage() {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState('');
-  const [reportData, setReportData] = useState<ReportData>(INITIAL_REPORT);
-  const [dataStale, setDataStale] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>('loading');
   const [period, setPeriod] = useState<ReportPeriod>('weekly');
   const [selectedWeek, setSelectedWeek] = useState(() => new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
@@ -210,24 +167,33 @@ export default function ReportsPage() {
     }
   }, [router]);
 
-  useEffect(() => {
-    Promise.all([
+  const loadReports = useCallback(async () => {
+    setFetchStatus('loading');
+    const [summaryRes, weeklyRes, distributionRes, monthlyRes] = await Promise.allSettled([
       adminApi.reportSummary(),
       adminApi.reportWeeklyCollection(),
       adminApi.reportWasteTypeDistribution(),
       adminApi.reportMonthlyPerformance(),
-    ])
-      .then(([summary, weekly, distribution, monthly]) => {
-        setReportData((current) => buildReportData(summary, weekly, distribution, monthly, current));
-        setDataStale(false);
-      })
-      .catch(() => {
-        // Do NOT present the 2024 sample fallback as data: flag a hard load
-        // failure so charts/export are blocked until live data arrives.
-        setLoadFailed(true);
-        setDataStale(true);
-      });
+    ]);
+
+    const allOk = [summaryRes, weeklyRes, distributionRes, monthlyRes].every((r) => r.status === 'fulfilled');
+    if (!allOk) {
+      setFetchStatus('error');
+      return;
+    }
+
+    const summary = (summaryRes as PromiseFulfilledResult<{ totalHouseholds: number; activeCollectors: number; wasteCollected: number; recycledRate: number }>).value;
+    const weekly = (weeklyRes as PromiseFulfilledResult<{ _id: string; totalKg: number }[]>).value;
+    const distribution = (distributionRes as PromiseFulfilledResult<{ _id: string; weightKg: number }[]>).value;
+    const monthly = (monthlyRes as PromiseFulfilledResult<{ _id: string; totalKg: number }[]>).value;
+
+    setReportData(buildReportData(summary, weekly, distribution, monthly));
+    setFetchStatus('ok');
   }, []);
+
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
 
   const periodLabel =
     period === 'weekly'
@@ -236,7 +202,7 @@ export default function ReportsPage() {
         ? new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
         : `Year ${selectedYear}`;
 
-  const filteredWeekly: WeeklyCollectionRow[] = reportData.weeklyCollection.filter((row) => {
+  const filteredWeekly: WeeklyCollectionRow[] = (reportData?.weeklyCollection ?? []).filter((row) => {
     if (!row.date) return period === 'weekly';
     if (period === 'weekly') {
       const start = startOfWeek(selectedWeek).getTime();
@@ -247,7 +213,7 @@ export default function ReportsPage() {
     return row.date.slice(0, 4) === String(selectedYear);
   });
 
-  const filteredMonthly: MonthlyPerformanceRow[] = reportData.monthlyPerformance.filter((row) => {
+  const filteredMonthly: MonthlyPerformanceRow[] = (reportData?.monthlyPerformance ?? []).filter((row) => {
     const parsed = new Date(`${row.month} 01`);
     if (isNaN(parsed.getTime())) return true;
     if (period === 'monthly') {
@@ -342,9 +308,11 @@ export default function ReportsPage() {
     }
   };
 
-  const { summary, wasteDistribution } = reportData;
+  const summary = reportData?.summary ?? null;
+  const wasteDistribution: WasteDistributionRow[] = reportData?.wasteDistribution ?? [];
   const weeklyCollection = filteredWeekly;
   const monthlyPerformance = filteredMonthly;
+  const weeklyMaxKg = Math.max(...weeklyCollection.map((r) => r.kg), 1);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
@@ -372,7 +340,7 @@ export default function ReportsPage() {
             </label>
             <button
               onClick={handleExport}
-              disabled={isExporting || loadFailed}
+              disabled={isExporting || fetchStatus !== 'ok'}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isExporting ? 'Preparing...' : 'Export to Excel'}
@@ -380,16 +348,26 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {loadFailed ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            Could not load reports — the backend is unreachable. Start the backend and refresh; no figures are shown until live data loads.
+        {fetchStatus === 'loading' && (
+          <div className="mb-6 rounded-2xl border border-green-100 bg-white/80 px-5 py-4 text-sm font-medium text-gray-600 flex items-center gap-3">
+            <svg className="h-4 w-4 animate-spin text-green-600" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+            Connecting to server… this may take a few seconds on first load.
           </div>
-        ) : (
-          dataStale && (
-            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-              Showing sample data — the backend is unreachable, so these figures are not live. Start the backend and refresh to load real reports.
-            </div>
-          )
+        )}
+
+        {fetchStatus === 'error' && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700 flex items-center justify-between gap-4">
+            <span>Could not load reports — the backend is unreachable. No figures are shown until live data loads.</span>
+            <button
+              onClick={() => void loadReports()}
+              className="shrink-0 rounded-xl bg-red-100 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-200"
+            >
+              Retry
+            </button>
+          </div>
         )}
 
         {exportError && (
@@ -449,29 +427,29 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {!loadFailed && (
+        {fetchStatus === 'ok' && summary && (
           <>
             {/* Key Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.totalHouseholds.toLocaleString()}</div>
             <p className="text-base text-gray-700 font-medium">Total Households</p>
-            <p className="text-sm text-green-600">{summary.householdsDelta}</p>
+            {summary.householdsDelta && <p className="text-sm text-green-600">{summary.householdsDelta}</p>}
           </div>
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.activeCollectors.toLocaleString()}</div>
             <p className="text-base text-gray-700 font-medium">Active Collectors</p>
-            <p className="text-sm text-green-600">{summary.collectorsDelta}</p>
+            {summary.collectorsDelta && <p className="text-sm text-green-600">{summary.collectorsDelta}</p>}
           </div>
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{formatKg(summary.wasteCollectedKg)}</div>
             <p className="text-base text-gray-700 font-medium">Waste Collected (kg)</p>
-            <p className="text-sm text-green-600">{summary.wasteDelta}</p>
+            {summary.wasteDelta && <p className="text-sm text-green-600">{summary.wasteDelta}</p>}
           </div>
           <div className="rounded-[28px] border border-green-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
             <div className="text-3xl font-bold text-green-600 mb-2">{summary.recycledRate}%</div>
             <p className="text-base text-gray-700 font-medium">Recycled Rate</p>
-            <p className="text-sm text-green-600">{summary.recycledDelta}</p>
+            {summary.recycledDelta && <p className="text-sm text-green-600">{summary.recycledDelta}</p>}
           </div>
         </div>
 
@@ -491,7 +469,7 @@ export default function ReportsPage() {
                     <span className="text-sm font-semibold text-gray-800">{row.kg.toLocaleString()} kg</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-green-600 h-2 rounded-full" style={{ width: `${weekProgressPercent(row.kg)}%` }}></div>
+                    <div className="bg-green-600 h-2 rounded-full" style={{ width: `${weekProgressPercent(row.kg, weeklyMaxKg)}%` }}></div>
                   </div>
                 </div>
               ))}
