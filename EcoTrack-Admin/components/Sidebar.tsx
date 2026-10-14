@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { adminApi } from '../lib/api';
 
 type SidebarProps = {
   onLogout: () => void;
@@ -82,13 +84,13 @@ const menuItems = [
     ),
   },
   {
-    id: 'notifications',
-    label: 'Notifications',
-    href: '/notifications',
+    id: 'messages',
+    label: 'Messages',
+    href: '/messages',
+    // Chat bubble icon
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10 20a2 2 0 0 0 4 0" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     ),
   },
@@ -97,13 +99,32 @@ const menuItems = [
 export default function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Fetch unread count for the Messages badge.
+  // Uses limit=1 just to get the total; a full re-fetch happens when the
+  // user actually opens the Messages page.
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('authToken') : null;
+    if (!token) return;
+    void adminApi.notifications('?limit=100')
+      .then((result) => {
+        const unread = (result.items ?? []).filter((n) => !n.read).length;
+        setUnreadCount(unread);
+      })
+      .catch(() => undefined);
+  }, [pathname]);
 
   const handleLogout = () => {
     onLogout();
     router.push('/');
   };
 
-  const isActive = (href: string) => pathname === href;
+  // /messages is active for both /messages and /notifications (legacy redirect)
+  const isActive = (href: string) => {
+    if (href === '/messages') return pathname === '/messages' || pathname === '/notifications';
+    return pathname === href;
+  };
 
   return (
     <>
@@ -154,7 +175,13 @@ export default function Sidebar({ onLogout, isOpen, onClose }: SidebarProps) {
                   <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${isActive(item.href) ? 'bg-green-600 text-white' : 'bg-white text-gray-500'}`}>
                     {item.icon}
                   </span>
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {/* Unread badge on the Messages item */}
+                  {item.id === 'messages' && unreadCount > 0 && (
+                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}
