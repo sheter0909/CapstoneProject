@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '../../lib/api';
+import { usePolled } from '../../hooks/usePolled';
 import { EmptyState, LoadingState, StatCard, StatusBadge } from '../../components/ui';
 
 interface AdminUser {
@@ -30,6 +31,15 @@ interface DashboardMetrics {
   pendingAlerts: number;
 }
 
+// Breakdown counts (active/inactive/archived) come from /api/dashboard/stats
+// which isn't polled — it changes only when accounts are archived/restored.
+interface DashboardBreakdown {
+  activeHouseholds: number;
+  inactiveHouseholds: number;
+  archivedHouseholds: number;
+  pendingAlerts: number;
+}
+
 function greetingForHour(hour: number): string {
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
@@ -50,14 +60,23 @@ function readStoredSession(): { token: string | null; user: AdminUser | null } {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [recentHouseholds, setRecentHouseholds] = useState<RecentHousehold[]>([]);
+
 
   const [session] = useState(readStoredSession);
   const adminUser = session.user;
   const isAuthenticated = session.token !== null && session.user !== null;
+
+  // ── Poll KPI stats every 10 s ──────────────────────────────────────────
+  const { data: liveStats } = usePolled(
+    () => adminApi.statsSummary(),
+    { intervalMs: 10_000, enabled: isAuthenticated },
+  );
+
+  // ── One-time fetch: breakdown counts + recent households ───────────────
+  const [breakdown, setBreakdown] = useState<DashboardBreakdown | null>(null);
+  const [recentHouseholds, setRecentHouseholds] = useState<RecentHousehold[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -67,18 +86,13 @@ export default function DashboardPage() {
 
     Promise.all([
       adminApi.dashboardStats() as Promise<{ totalHouseholds: number; activeHouseholds: number; inactiveHouseholds: number; archivedHouseholds: number; pendingAlerts: number }>,
-      adminApi.reportSummary(),
       adminApi.households('?limit=5') as Promise<{ items?: { id: string; fullName: string; purok: string; joinDate: string; status: string }[] }>,
     ])
-      .then(([stats, summary, households]) => {
-        setMetrics({
-          totalHouseholds: stats.totalHouseholds,
+      .then(([stats, households]) => {
+        setBreakdown({
           activeHouseholds: stats.activeHouseholds,
           inactiveHouseholds: stats.inactiveHouseholds,
           archivedHouseholds: stats.archivedHouseholds,
-          activeCollectors: summary.activeCollectors,
-          wasteCollectedKg: Math.round(summary.wasteCollected * 100) / 100,
-          recycledRate: Math.round(summary.recycledRate * 10) / 10,
           pendingAlerts: stats.pendingAlerts,
         });
         setRecentHouseholds(
@@ -98,6 +112,18 @@ export default function DashboardPage() {
         setIsLoading(false);
       });
   }, [router, isAuthenticated]);
+
+  // Merge live polled stats with the one-time breakdown for rendering.
+  const metrics: DashboardMetrics | null = liveStats && breakdown ? {
+    totalHouseholds: liveStats.totalHouseholds,
+    activeHouseholds: breakdown.activeHouseholds,
+    inactiveHouseholds: breakdown.inactiveHouseholds,
+    archivedHouseholds: breakdown.archivedHouseholds,
+    activeCollectors: liveStats.activeCollectors,
+    wasteCollectedKg: Math.round(liveStats.wasteCollectedKg * 100) / 100,
+    recycledRate: Math.round(liveStats.recycledRate * 10) / 10,
+    pendingAlerts: breakdown.pendingAlerts,
+  } : null;
 
   if (!isAuthenticated) {
     return (

@@ -121,6 +121,31 @@ export async function changeStatus(req: Request, res: Response, next: NextFuncti
 
 export async function nextCollectorId() { const collectors = await prisma.garbageCollector.findMany({ select: { collectorId: true } }); const latest = collectors.map(({ collectorId }) => Number(collectorId.match(/^GC-(\d+)$/)?.[1] ?? 0)).sort((a, b) => b - a)[0] ?? 0; return `GC-${String(latest + 1).padStart(4, '0')}`; }
 
-export function reportByPeriod(period: 'day' | 'month') { return async (_req: Request, res: Response, next: NextFunction) => { try { const entries = await prisma.collectionEntry.findMany({ select: { timestamp: true, weightKg: true } }); const totals = new Map<string, number>(); for (const entry of entries) { // Bucket in Philippines time (UTC+8, no DST): toISOString() is UTC, so an evening
-      // collection in PH previously landed in the next UTC day/month bucket.
-      const phTime = new Date(entry.timestamp.getTime() + 8 * 60 * 60 * 1000); const date = phTime.toISOString(); const key = period === 'day' ? date.slice(0, 10) : date.slice(0, 7); totals.set(key, (totals.get(key) ?? 0) + Number(entry.weightKg)); } return ok(res, [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([_id, totalKg]) => ({ _id, totalKg }))); } catch (error) { next(error); } }; }
+// Buckets collection entries by day or month (Philippines time, UTC+8).
+// Accepts optional `from` and `to` ISO query params to restrict the date
+// range — used by the Reports page period picker.
+export function reportByPeriod(period: 'day' | 'month') {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+      const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+      const where =
+        from || to
+          ? { timestamp: { ...(from && { gte: from }), ...(to && { lt: to }) } }
+          : {};
+      const entries = await prisma.collectionEntry.findMany({ where, select: { timestamp: true, weightKg: true } });
+      const totals = new Map<string, number>();
+      for (const entry of entries) {
+        // Bucket in Philippines time (UTC+8, no DST): toISOString() is UTC, so an evening
+        // collection in PH previously landed in the next UTC day/month bucket.
+        const phTime = new Date(entry.timestamp.getTime() + 8 * 60 * 60 * 1000);
+        const date = phTime.toISOString();
+        const key = period === 'day' ? date.slice(0, 10) : date.slice(0, 7);
+        totals.set(key, (totals.get(key) ?? 0) + Number(entry.weightKg));
+      }
+      return ok(res, [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([_id, totalKg]) => ({ _id, totalKg })));
+    } catch (error) {
+      next(error);
+    }
+  };
+}

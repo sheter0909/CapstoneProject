@@ -37,6 +37,9 @@ interface BackendHouseholdAccount {
 
 interface HouseholdListResult {
   items?: BackendHouseholdAccount[];
+  // total is the authoritative non-archived count from the backend
+  // (list() helper filters status !== 'archived' and counts that same set).
+  total?: number;
 }
 
 interface CollectionHistoryEntry {
@@ -93,6 +96,9 @@ export default function HouseholdsPage() {
   const [showUpdateSuccess, setShowUpdateSuccess] = useState(false);
   const [collectionHistory, setCollectionHistory] = useState<CollectionHistoryEntry[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Authoritative non-archived count from the backend (not visibleHouseholds.length
+  // which is a client-side slice and wrong when result has pagination).
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   const [hasStoredSession] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -103,15 +109,12 @@ export default function HouseholdsPage() {
     }
   });
 
-  // Check authentication on mount and load households from the backend
-  useEffect(() => {
-    if (!hasStoredSession) {
-      router.push('/login');
-      return;
-    }
-
+  // Reusable loader — called on mount and after any create/archive/restore.
+  const loadHouseholds = () => {
+    setIsLoading(true);
     void (adminApi.households('?limit=100') as Promise<HouseholdListResult>)
-      .then((result) =>
+      .then((result) => {
+        setTotalCount(result.total ?? null);
         setHouseholds(
           (result.items ?? []).map((account) => ({
             id: account.id,
@@ -125,12 +128,21 @@ export default function HouseholdsPage() {
             status: account.status,
             violations: account.violationCount ?? 0,
           }))
-        )
-      )
+        );
+      })
       .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Unable to load households.'))
       .finally(() => setIsLoading(false));
-  }, [router, hasStoredSession]);
+  };
 
+  // Check authentication on mount and load households from the backend
+  useEffect(() => {
+    if (!hasStoredSession) {
+      router.push('/login');
+      return;
+    }
+    loadHouseholds();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, hasStoredSession]);
 
 
   const resetFormState = () => {
@@ -297,9 +309,10 @@ export default function HouseholdsPage() {
         joinDate: account.joinDate,
         status: account.status
       };
-      const updatedHouseholds = [...households.filter((household) => household.id !== pendingNewHousehold.id), updatedHousehold];
-      setHouseholds(updatedHouseholds);
+      setHouseholds((prev) => [...prev.filter((h) => h.id !== pendingNewHousehold.id), updatedHousehold]);
       setSelectedHousehold(updatedHousehold);
+      // Refresh the list + authoritative total from the backend.
+      loadHouseholds();
 
       setFormData({ name: '', email: '', unit: '', password: '', purok: '', address: '' });
       setShowForm(false);
@@ -336,11 +349,10 @@ export default function HouseholdsPage() {
       const account = await (isRestoring
         ? adminApi.unarchiveHousehold(selectedHousehold.id)
         : adminApi.archiveHousehold(selectedHousehold.id)) as { status: Household['status'] };
-      const updated: Household[] = households.map((h) =>
-        h.id === selectedHousehold.id ? { ...h, status: account.status } : h
-      );
-      setHouseholds(updated);
+      setHouseholds((prev) => prev.map((h) => h.id === selectedHousehold.id ? { ...h, status: account.status } : h));
       setSelectedHousehold({ ...selectedHousehold, status: account.status });
+      // Refresh the list + authoritative total from the backend.
+      loadHouseholds();
       setShowArchiveConfirm(false);
       setShowUpdateSuccess(true);
       setToastMessage(isRestoring ? 'Household restored successfully' : 'Household archived successfully');
@@ -608,7 +620,7 @@ export default function HouseholdsPage() {
               <div className="border-b border-gray-100 p-5 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-900">All Households ({visibleHouseholds.length})</h3>
+                    <h3 className="text-xl font-semibold text-gray-900">All Households ({totalCount ?? visibleHouseholds.length})</h3>
                     <p className="mt-1 text-sm text-gray-500">A clear list of active and inactive households.</p>
                   </div>
                   <div className="w-full sm:w-80">

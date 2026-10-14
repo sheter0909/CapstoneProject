@@ -35,6 +35,17 @@ export type ApiConnectingState = {
   path: string;
 };
 
+export interface StatsSummary {
+  totalHouseholds: number;
+  householdsDelta: string;
+  activeCollectors: number;
+  collectorsDelta: string;
+  wasteCollectedKg: number;
+  wasteDelta: string;
+  recycledRate: number;
+  recycledDelta: string;
+}
+
 export interface CollectorCollectionRecord {
   id: string;
   householdId: string;
@@ -220,12 +231,13 @@ export const adminApi = {
   allCollections: (query = '') => apiRequest<{ items: CollectionAdminRecord[]; total: number; page: number; totalPages: number }>(`/collections${query}`),
   collectorCollections: (id: string) => apiRequest<CollectorCollectionHistory>(`/collectors/${encodeURIComponent(id)}/collections`),
   reportSummary: () => apiRequest<{ totalHouseholds: number; activeCollectors: number; wasteCollected: number; recycledRate: number }>('/reports/summary'),
-  reportWeeklyCollection: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/weekly-collection'),
-  reportWasteTypeDistribution: () => apiRequest<{ _id: string; weightKg: number }[]>('/reports/waste-type-distribution'),
-  reportMonthlyPerformance: () => apiRequest<{ _id: string; totalKg: number }[]>('/reports/monthly-performance'),
+  reportWeeklyCollection: (query = '') => apiRequest<{ _id: string; totalKg: number }[]>(`/reports/weekly-collection${query}`),
+  reportWasteTypeDistribution: (query = '') => apiRequest<{ _id: string; weightKg: number }[]>(`/reports/waste-type-distribution${query}`),
+  reportMonthlyPerformance: (query = '') => apiRequest<{ _id: string; totalKg: number }[]>(`/reports/monthly-performance${query}`),
   notifications: (query = '') => apiRequest<{ items: AdminNotification[]; total: number; page: number; totalPages: number }>(`/notifications${query}`),
   sendNotification: (body: { title: string; message: string; recipientType: NotificationRecipientType; householdId?: string; collectorId?: string; level?: string }) =>
     apiRequest<AdminNotification>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
   markNotificationRead: (id: string) => apiRequest<AdminNotification>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+  statsSummary: () => apiRequest<StatsSummary>('/stats/summary'),
   health: () => fetch(`${API_URL}/health`).then(() => undefined).catch(() => undefined),
 };
