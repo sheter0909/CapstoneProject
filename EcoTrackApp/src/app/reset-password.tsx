@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
@@ -40,7 +41,7 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <Text style={styles.title}>New Password</Text>
@@ -66,8 +67,10 @@ export default function ResetPasswordScreen() {
                     secureTextEntry={!showPassword}
                   />
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={showPassword ? 'Hide new password' : 'Show new password'}
                     onPress={() => setShowPassword(!showPassword)}
+                    hitSlop={8}
                   >
                     <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
                   </Pressable>
@@ -85,8 +88,10 @@ export default function ResetPasswordScreen() {
                     secureTextEntry={!showConfirmation}
                   />
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'}
                     onPress={() => setShowConfirmation(!showConfirmation)}
+                    hitSlop={8}
                   >
                     <MaterialIcons name={showConfirmation ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
                   </Pressable>
@@ -149,6 +154,7 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     height: 48,
+    width: '100%',
     paddingHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
@@ -156,10 +162,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F7F7',
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   passwordField: {
     flex: 1,
+    minWidth: 0,
     height: '100%',
+    ...Platform.select({
+      web: { outlineWidth: 0 },
+      default: {},
+    }),
   },
   primaryButton: {
     marginTop: 12,

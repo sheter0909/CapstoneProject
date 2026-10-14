@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NotificationCard } from '@/components/notification-card';
 import { Spacing } from '@/constants/theme';
 import { collectorApi, NotificationItem } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  if (isNaN(date.getTime())) return iso;
-  const datePart = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  const timePart = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return `${datePart} • ${timePart}`;
-}
 
 export default function CollectorNotificationsScreen() {
   const router = useRouter();
@@ -49,8 +42,8 @@ export default function CollectorNotificationsScreen() {
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.card}>
+    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.content}>
         <Text style={styles.title}>
           Notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ''}
         </Text>
@@ -70,31 +63,11 @@ export default function CollectorNotificationsScreen() {
             <Text style={styles.stateText}>No notifications found.</Text>
           </View>
         ) : (
-          notifications.map((item) => (
-            <View key={item.id} style={[styles.notificationItem, !item.read && styles.notificationUnread]}>
-              <View style={styles.notificationHeader}>
-                <Text style={styles.notificationLabel}>{item.title}</Text>
-                {!item.read ? <View style={styles.unreadDot} /> : null}
-              </View>
-              <Text style={styles.notificationSender}>
-                {item.senderName} • {item.senderRole}
-              </Text>
-              <Text style={styles.notificationDescription}>{item.message}</Text>
-              <View style={styles.notificationFooter}>
-                <View style={(item.level ?? '').toLowerCase().includes('warning') ? styles.notificationBadge : styles.notificationBadgeSecondary}>
-                  <Text style={(item.level ?? '').toLowerCase().includes('warning') ? styles.badgeText : styles.badgeTextSecondary}>
-                    {item.level || 'Announcement'}
-                  </Text>
-                </View>
-                <Text style={styles.dateText}>{formatDateTime(item.createdAt)}</Text>
-              </View>
-              {!item.read ? (
-                <Pressable style={styles.markReadButton} onPress={() => void handleMarkRead(item.id)}>
-                  <Text style={styles.markReadText}>Mark as read</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))
+          <View style={styles.list}>
+            {notifications.map((item) => (
+              <NotificationCard key={item.id} item={item} onMarkRead={handleMarkRead} />
+            ))}
+          </View>
         )}
 
         <Pressable style={styles.backButton} onPress={() => safeBack(router, '/garbagecollector')}>
@@ -107,15 +80,12 @@ export default function CollectorNotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: Spacing.four,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: 0,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: Spacing.four,
+  content: {
+    width: '100%',
     gap: Spacing.three,
-    boxShadow: '0px 8px 12px rgba(0,0,0,0.05)',
-    elevation: 3,
   },
   title: {
     fontSize: 24,
@@ -125,7 +95,7 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#555',
     fontSize: 14,
-    marginBottom: Spacing.two,
+    marginBottom: Spacing.one,
   },
   stateBox: {
     paddingVertical: Spacing.four,
@@ -142,86 +112,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  notificationItem: {
-    backgroundColor: '#F6F9F6',
-    borderRadius: 18,
-    padding: Spacing.four,
-    gap: Spacing.two,
-  },
-  notificationUnread: {
-    borderWidth: 1,
-    borderColor: '#1F7A37',
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  notificationLabel: {
-    fontWeight: '700',
-    color: '#1F7A37',
-    fontSize: 16,
-    flex: 1,
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#DC2626',
-  },
-  notificationSender: {
-    color: '#6B7280',
-    fontSize: 13,
-  },
-  notificationDescription: {
-    color: '#4A4A4A',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  notificationFooter: {
-    marginTop: Spacing.two,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dateText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  notificationBadge: {
-    backgroundColor: '#FDEBD8',
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  badgeText: {
-    color: '#9A5C1B',
-    fontWeight: '700',
-  },
-  notificationBadgeSecondary: {
-    backgroundColor: '#E1F7DF',
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  badgeTextSecondary: {
-    color: '#1F7A37',
-    fontWeight: '700',
-  },
-  markReadButton: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: '#1F7A37',
-  },
-  markReadText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
+  list: {
+    width: '100%',
+    gap: Spacing.three,
   },
   backButton: {
     marginTop: Spacing.four,

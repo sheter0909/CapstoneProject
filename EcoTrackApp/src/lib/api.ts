@@ -8,7 +8,8 @@ function logApiBaseOnce() {
     console.warn(`[EcoTrack] API base URL resolved to: ${API_URL}`);
   }
 }
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 60_000;
+export const API_BASE_URL = API_URL;
 
 export type ApiResponse<T> = { success: boolean; data: T; message?: string; errors?: FieldError[] | unknown; code?: string };
 
@@ -116,7 +117,18 @@ export type SendNotificationBody = {
   level?: string;
 };
 
-const RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
+const RETRY_DELAYS_MS = [3_000];
+
+export const SERVER_WAKING_MESSAGE = 'Server is waking up, please try again in a few seconds.';
+
+function toFriendlyNetworkMessage(): string {
+  return SERVER_WAKING_MESSAGE;
+}
+
+function logRequestError(method: string, url: string, info: string) {
+  // Real diagnostics: status code / body / network error for debugging.
+  console.warn(`[EcoTrack] ${method} ${url} failed: ${info}`);
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -140,8 +152,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         signal: options.signal ?? controller.signal,
         headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}), ...authHeader(portal) },
       });
-    } catch {
-      lastError = new Error(`Unable to connect to backend server at ${API_URL}. Please make sure the backend is running.`);
+    } catch (err) {
+      const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      logRequestError(method, `${API_URL}${path}`, detail);
+      lastError = new Error(toFriendlyNetworkMessage());
       if (attempt < RETRY_DELAYS_MS.length) {
         await sleep(RETRY_DELAYS_MS[attempt]);
         continue;
@@ -163,19 +177,23 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     const fieldErrors = toFieldErrors(payload?.errors);
     // Client errors (4xx) are final — do not retry.
     if (response.status >= 400 && response.status < 500) {
-      const message = fieldErrors?.[0]?.message ?? payload?.message ?? `API request failed (${response.status} ${method} ${API_URL}${path})`;
+      const message = fieldErrors?.[0]?.message ?? payload?.message ?? `API request failed (${response.status} ${method} ${path})`;
+      logRequestError(method, `${API_URL}${path}`, `HTTP ${response.status}: ${message}`);
       if (response.status === 401) unauthorizedHandler?.(portal);
       throw new ApiError(message, response.status, fieldErrors, payload?.code);
     }
 
     // The backend answered with an explicit error — final, do not retry.
+    // Server message is surfaced as-is so 4xx/5xx show what the server said.
     if (payload?.message) {
       const message = fieldErrors?.[0]?.message ?? payload.message;
+      logRequestError(method, `${API_URL}${path}`, `HTTP ${response.status}: ${message}`);
       throw new ApiError(message, response.status, fieldErrors, payload?.code);
     }
 
-    // No usable message (e.g. a proxy/idle-server HTML page): transient, retry.
-    lastError = new Error(`API request failed (${response.status} ${method} ${API_URL}${path})`);
+    // No usable message (e.g. a proxy/idle-server HTML page): transient, retry once.
+    lastError = new Error(toFriendlyNetworkMessage());
+    logRequestError(method, `${API_URL}${path}`, `HTTP ${response.status} with non-JSON body`);
     if ((globalThis as { __DEV__?: boolean }).__DEV__) {
       console.warn(`[EcoTrack] ${method} ${API_URL}${path} -> HTTP ${response.status} with non-JSON body. Check EXPO_PUBLIC_API_URL.`);
     }

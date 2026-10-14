@@ -1,5 +1,6 @@
 import { Link, Slot, useRouter, useSegments, type Href } from 'expo-router';
-import { Animated, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Spacing } from '@/constants/theme';
@@ -42,7 +43,7 @@ export default function GarbageCollectorLayout() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       {isMobile ? (
       <View style={styles.topBar}>
         <Pressable
@@ -147,7 +148,7 @@ export default function GarbageCollectorLayout() {
         ) : null}
 
         <View style={[styles.contentPane, isMobile && styles.contentPaneMobile]}>
-          <View style={styles.contentCard}>
+          <View style={[styles.contentCard, isMobile && styles.contentCardMobile]}>
             <Slot />
           </View>
         </View>
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
   },
   contentPaneMobile: {
     width: '100%',
-    padding: Spacing.four,
+    padding: Spacing.three,
   },
   contentCard: {
     flex: 1,
@@ -295,5 +296,9 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     boxShadow: '0px 10px 16px rgba(0,0,0,0.08)',
     elevation: 4,
+  },
+  contentCardMobile: {
+    borderRadius: 24,
+    padding: Spacing.three,
   },
 });

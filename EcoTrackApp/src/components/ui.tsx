@@ -242,6 +242,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.field,
     paddingHorizontal: 12,
@@ -249,10 +250,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Brand.fieldBorder,
     gap: 10,
+    overflow: 'hidden',
   },
   inputFlex: {
     flex: 1,
+    minWidth: 0,
     height: '100%',
+    ...Platform.select({
+      web: { outlineWidth: 0 },
+      default: {},
+    }),
   },
   sectionHeader: {
     flexDirection: 'row',

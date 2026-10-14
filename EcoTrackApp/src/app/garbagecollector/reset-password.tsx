@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 
@@ -46,7 +47,7 @@ export default function ResetCollectorPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           {isReset ? (
@@ -62,7 +63,7 @@ export default function ResetCollectorPasswordScreen() {
                 <Text style={styles.label}>New password</Text>
                 <View style={styles.passwordInput}>
                   <TextInput style={styles.passwordField} value={password} onChangeText={(val) => { setPassword(val); if (error) setError(''); }} placeholder="At least 8 characters" placeholderTextColor="#999" secureTextEntry={!showPassword} />
-                  <Pressable accessibilityLabel={showPassword ? 'Hide new password' : 'Show new password'} onPress={() => setShowPassword(!showPassword)}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide new password' : 'Show new password'} onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
                     <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
                   </Pressable>
                 </View>
@@ -71,7 +72,7 @@ export default function ResetCollectorPasswordScreen() {
                 <Text style={styles.label}>Confirm password</Text>
                 <View style={styles.passwordInput}>
                   <TextInput style={styles.passwordField} value={confirmation} onChangeText={setConfirmation} placeholder="Confirm new password" placeholderTextColor="#999" secureTextEntry={!showConfirmation} />
-                  <Pressable accessibilityLabel={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'} onPress={() => setShowConfirmation(!showConfirmation)}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'} onPress={() => setShowConfirmation(!showConfirmation)} hitSlop={8}>
                     <MaterialIcons name={showConfirmation ? 'visibility-off' : 'visibility'} size={22} color="#6B8A6B" />
                   </Pressable>
                 </View>
@@ -96,8 +97,16 @@ const styles = StyleSheet.create({
   subtitle: { color: '#4A4A4A', lineHeight: 20 },
   inputGroup: { gap: 8 },
   label: { fontSize: 14, fontWeight: '600', color: '#4A4A4A' },
-  passwordInput: { height: 48, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: '#D9D9D9', backgroundColor: '#F7F7F7', flexDirection: 'row', alignItems: 'center' },
-  passwordField: { flex: 1, height: '100%' },
+  passwordInput: { height: 48, width: '100%', paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: '#D9D9D9', backgroundColor: '#F7F7F7', flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  passwordField: {
+    flex: 1,
+    minWidth: 0,
+    height: '100%',
+    ...Platform.select({
+      web: { outlineWidth: 0 },
+      default: {},
+    }),
+  },
   errorText: { color: '#B00020', fontSize: 14, fontWeight: '600' },
   primaryButton: { marginTop: 12, borderRadius: 14, backgroundColor: '#1F7A37', paddingVertical: 14, alignItems: 'center' },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },

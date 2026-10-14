@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
-import { collectorApi } from '@/lib/api';
+import { collectorApi, ApiError, SERVER_WAKING_MESSAGE } from '@/lib/api';
+
+function friendlySendError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return err.message; // server returned an error: show its message
+  if (err instanceof Error && err.message === SERVER_WAKING_MESSAGE) return SERVER_WAKING_MESSAGE;
+  return fallback;
+}
 import { safeBack } from '@/lib/navigation';
 
 const REPORT_REASONS = ['Uncollected trash', 'Contamination', 'Other'];
@@ -33,8 +39,8 @@ export default function CollectorContactScreen() {
     setMsgSending(true);
     try {
       await collectorApi.sendNotification({
-        title: msgTitle.trim(),
-        message: msgBody.trim(),
+        title: msgTitle.trim().slice(0, 120),
+        message: msgBody.trim().slice(0, 2000),
         recipientType: 'admin',
         level: 'Collector Concern',
       });
@@ -42,7 +48,7 @@ export default function CollectorContactScreen() {
       setMsgBody('');
       setMsgSuccess('Message sent to admin.');
     } catch (err) {
-      setMsgError(err instanceof Error ? err.message : 'Unable to send message.');
+      setMsgError(friendlySendError(err, 'Unable to send message. Please check your connection and try again.'));
     } finally {
       setMsgSending(false);
     }
@@ -69,7 +75,7 @@ export default function CollectorContactScreen() {
       setReportDetails('');
       setReportSuccess('Report submitted. The barangay admin will review this.');
     } catch (err) {
-      setReportError(err instanceof Error ? err.message : 'Unable to submit report.');
+      setReportError(friendlySendError(err, 'Unable to submit report. Please check your connection and try again.'));
     } finally {
       setReportSending(false);
     }
@@ -106,7 +112,7 @@ export default function CollectorContactScreen() {
             />
             {msgError ? <Text style={styles.errorText}>{msgError}</Text> : null}
             {msgSuccess ? <Text style={styles.successText}>{msgSuccess}</Text> : null}
-            <Pressable style={styles.primaryButton} onPress={handleMessageAdmin} disabled={msgSending}>
+            <Pressable style={[styles.primaryButton, msgSending && styles.primaryButtonDisabled]} onPress={handleMessageAdmin} disabled={msgSending}>
               <Text style={styles.primaryButtonText}>{msgSending ? 'Sending...' : 'Send Message'}</Text>
             </Pressable>
           </View>
@@ -150,7 +156,7 @@ export default function CollectorContactScreen() {
             />
             {reportError ? <Text style={styles.errorText}>{reportError}</Text> : null}
             {reportSuccess ? <Text style={styles.successText}>{reportSuccess}</Text> : null}
-            <Pressable style={styles.primaryButton} onPress={handleReport} disabled={reportSending}>
+            <Pressable style={[styles.primaryButton, reportSending && styles.primaryButtonDisabled]} onPress={handleReport} disabled={reportSending}>
               <Text style={styles.primaryButtonText}>{reportSending ? 'Submitting...' : 'Submit Report'}</Text>
             </Pressable>
           </View>
@@ -260,6 +266,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 15,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   errorText: {
     color: '#DC2626',

@@ -22,6 +22,10 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
     "plugins": [
       "expo-router",
       [
@@ -37,7 +41,9 @@
         {
           "cameraPermission": "Allow EcoTrack to access your camera to scan household QR codes."
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
