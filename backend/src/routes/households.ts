@@ -19,6 +19,7 @@ import {
   getViolationCount,
   resolveReportReason,
   violationCounts,
+  WARNING_LEVELS,
   withEditable,
 } from './helpers.js';
 import { normalizePurokName } from './puroks.js';
@@ -331,10 +332,21 @@ async function lookupHouseholdForCollector(req: Request, res: Response, next: Ne
       const purokError = checkPurokMatch(collector?.purokId, account.purokId);
       if (purokError) return fail(res, 403, purokError);
     }
-    const [notSegregatedCount, summaryHistory, violationCount] = await Promise.all([
+    const [notSegregatedCount, summaryHistory, violationCount, reportWarningCount] = await Promise.all([
       prisma.collectionEntry.count({ where: { householdId, segregationStatus: 'not_segregated' } }),
       prisma.collectionEntry.findMany({ where: { householdId }, orderBy: { timestamp: 'desc' }, take: 10 }),
       getViolationCount(householdId),
+      // Warnings issued from the collector Report form carry no collection
+      // entry, but they extend the same First -> Second -> Final ladder, so
+      // the Edit Entry preview must count them to stay consistent.
+      prisma.notification.count({
+        where: {
+          householdId,
+          senderRole: 'collector',
+          collectionEntryId: null,
+          level: { in: [...WARNING_LEVELS] },
+        },
+      }),
     ]);
     return ok(res, {
       household: {
@@ -348,7 +360,7 @@ async function lookupHouseholdForCollector(req: Request, res: Response, next: Ne
       history: summaryHistory.map((entry) => withEditable(entry, req.user!.id)),
       notSegregatedCount,
       violationCount,
-      nextWarningLevel: nextWarningLevelForCount(notSegregatedCount),
+      nextWarningLevel: nextWarningLevelForCount(notSegregatedCount + reportWarningCount),
     });
   } catch (error) {
     next(error);

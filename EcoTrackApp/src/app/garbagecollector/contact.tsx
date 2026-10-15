@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 import { collectorApi, ApiError, SERVER_WAKING_MESSAGE, ReportReason, NotificationItem } from '@/lib/api';
 import { safeBack } from '@/lib/navigation';
@@ -12,10 +12,26 @@ function friendlySendError(err: unknown, fallback: string): string {
 }
 
 const REPORT_REASONS: { value: ReportReason; label: string }[] = [
-  { value: 'no_garbage_out', label: 'No garbage out' },
+  { value: 'no_garbage_out', label: 'Skip' },
   { value: 'dirty_surroundings', label: 'Dirty surroundings' },
   { value: 'other', label: 'Other' },
 ];
+
+// Max length for the free-text "Other" reason the collector types in.
+const OTHER_REASON_MAX = 100;
+
+// Only "Skip" (no_garbage_out) and "Contamination" (dirty_surroundings)
+// reports may issue a warning alongside the report; "Other" never does.
+const WARNING_ELIGIBLE_REASONS: ReportReason[] = ['no_garbage_out', 'dirty_surroundings'];
+
+// The "Other" text travels inside the existing Notification.message field so no
+// schema/API field is added: `Household ID: ...\n\n<details>\n\nOther reason: ...`.
+// startEditReport splits it back out for the edit form.
+function appendOtherReason(message: string, reason: ReportReason, otherReason: string): string {
+  const trimmed = otherReason.trim();
+  const otherLine = reason === 'other' && trimmed ? `\n\nOther reason: ${trimmed.slice(0, OTHER_REASON_MAX)}` : '';
+  return `${message}${otherLine}`.slice(0, 2000);
+}
 
 export default function CollectorContactScreen() {
   const router = useRouter();
@@ -31,6 +47,10 @@ export default function CollectorContactScreen() {
   const [reportHouseholdId, setReportHouseholdId] = useState(scannedId?.trim() ?? '');
   const [reportReason, setReportReason] = useState<ReportReason>('no_garbage_out');
   const [reportDetails, setReportDetails] = useState('');
+  const [reportOtherReason, setReportOtherReason] = useState('');
+  // Warning toggle: default OFF; sends the household a First/Second/Final
+  // warning (existing ladder) together with the report when ON.
+  const [reportWarning, setReportWarning] = useState(false);
   const [reportSending, setReportSending] = useState(false);
   const [reportError, setReportError] = useState('');
   const [reportSuccess, setReportSuccess] = useState('');
@@ -39,6 +59,7 @@ export default function CollectorContactScreen() {
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editReason, setEditReason] = useState<ReportReason>('no_garbage_out');
   const [editDetails, setEditDetails] = useState('');
+  const [editOtherReason, setEditOtherReason] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [withdrawId, setWithdrawId] = useState<string | null>(null);
@@ -82,7 +103,12 @@ export default function CollectorContactScreen() {
       ? (r.reportReason as ReportReason)
       : 'other';
     setEditReason(reason);
-    setEditDetails(r.message.replace(/^Household ID: .*?\n\n/, ''));
+    const stripped = r.message.replace(/^Household ID: .*?\n\n/, '');
+    // Split the appended "Other reason: ..." line back into its own field so
+    // the edit form can show it under the same rules as the create form.
+    const otherMatch = reason === 'other' ? /\n\nOther reason: ([\s\S]+)$/.exec(stripped) : null;
+    setEditOtherReason(otherMatch ? otherMatch[1].trim() : '');
+    setEditDetails(otherMatch ? stripped.slice(0, otherMatch.index) : stripped);
   };
 
   const saveEditReport = async () => {
@@ -91,12 +117,16 @@ export default function CollectorContactScreen() {
       setEditError('Details are required.');
       return;
     }
+    if (editReason === 'other' && !editOtherReason.trim()) {
+      setEditError('Specify what kind of "Other" reason this is.');
+      return;
+    }
     setEditError('');
     setEditSaving(true);
     try {
       const reasonLabel = REPORT_REASONS.find((x) => x.value === editReason)?.label ?? editReason;
       await collectorApi.updateReport(editingReportId, {
-        message: editDetails.trim(),
+        message: appendOtherReason(editDetails.trim(), editReason, editOtherReason),
         reportReason: editReason,
         title: `Report: ${reasonLabel} — ${myReports.find((x) => x.id === editingReportId)?.householdId ?? ''}`.slice(0, 120),
       });
@@ -147,11 +177,19 @@ export default function CollectorContactScreen() {
     }
   };
 
+  // Effective toggle state: hidden + forced OFF whenever the reason is not
+  // eligible ("Other"), so a stale ON can never leak into the request.
+  const warningEnabled = reportWarning && WARNING_ELIGIBLE_REASONS.includes(reportReason);
+
   const handleReport = async () => {
     setReportError('');
     setReportSuccess('');
     if (!reportHouseholdId.trim() || !reportDetails.trim()) {
       setReportError('Household ID and details are required.');
+      return;
+    }
+    if (reportReason === 'other' && !reportOtherReason.trim()) {
+      setReportError('Specify what kind of "Other" reason this is.');
       return;
     }
     // Confirm step before saving: review the household, reason and details.
@@ -166,15 +204,22 @@ export default function CollectorContactScreen() {
       const reasonLabel = REPORT_REASONS.find((r) => r.value === reportReason)?.label ?? reportReason;
       await collectorApi.sendNotification({
         title: `Report: ${reasonLabel} — ${reportHouseholdId.trim()}`.slice(0, 120),
-        message: `Household ID: ${reportHouseholdId.trim()}\n\n${reportDetails.trim()}`,
+        message: appendOtherReason(
+          `Household ID: ${reportHouseholdId.trim()}\n\n${reportDetails.trim()}`,
+          reportReason,
+          reportOtherReason,
+        ),
         recipientType: 'household',
         householdId: reportHouseholdId.trim(),
         level: `Report: ${reasonLabel}`,
         reportReason,
+        issueWarning: warningEnabled,
       });
       setReportHouseholdId('');
       setReportReason('no_garbage_out');
       setReportDetails('');
+      setReportOtherReason('');
+      setReportWarning(false);
       setShowReportConfirm(false);
       setReportSuccess('Report submitted. The barangay admin will review this.');
       await loadMyReports();
@@ -244,12 +289,30 @@ export default function CollectorContactScreen() {
                 <Pressable
                   key={reason.value}
                   style={[styles.reasonOption, reportReason === reason.value && styles.reasonOptionActive]}
-                  onPress={() => setReportReason(reason.value)}
+                  onPress={() => {
+                    setReportReason(reason.value);
+                    // The warning toggle is hidden for "Other": clear it so it
+                    // can't come back ON silently on a later reason switch.
+                    if (!WARNING_ELIGIBLE_REASONS.includes(reason.value)) setReportWarning(false);
+                  }}
                 >
                   <Text style={[styles.reasonText, reportReason === reason.value && styles.reasonTextActive]}>{reason.label}</Text>
                 </Pressable>
               ))}
             </View>
+            {reportReason === 'other' ? (
+              <>
+                <Text style={styles.label}>Other Reason</Text>
+                <TextInput
+                  style={styles.input}
+                  value={reportOtherReason}
+                  onChangeText={setReportOtherReason}
+                  placeholder="Specify other reason..."
+                  placeholderTextColor="#999"
+                  maxLength={OTHER_REASON_MAX}
+                />
+              </>
+            ) : null}
             <Text style={styles.label}>Details</Text>
             <TextInput
               style={[styles.input, styles.messageInput]}
@@ -259,6 +322,23 @@ export default function CollectorContactScreen() {
               placeholderTextColor="#999"
               multiline
             />
+            {WARNING_ELIGIBLE_REASONS.includes(reportReason) ? (
+              <View style={styles.warningRow}>
+                <View style={styles.warningRowText}>
+                  <Text style={styles.label}>Issue warning to household</Text>
+                  <Text style={styles.mutedText}>
+                    Gives the household a First/Second/Final warning together with this report.
+                  </Text>
+                </View>
+                <Switch
+                  value={reportWarning}
+                  onValueChange={setReportWarning}
+                  trackColor={{ false: '#D9D9D9', true: '#9CC7A0' }}
+                  thumbColor={reportWarning ? '#1F7A37' : '#F4F4F4'}
+                  ios_backgroundColor="#D9D9D9"
+                />
+              </View>
+            ) : null}
             {reportError ? <Text style={styles.errorText}>{reportError}</Text> : null}
             {reportSuccess ? <Text style={styles.successText}>{reportSuccess}</Text> : null}
             <Pressable style={[styles.primaryButton, reportSending && styles.primaryButtonDisabled]} onPress={handleReport} disabled={reportSending}>
@@ -272,6 +352,10 @@ export default function CollectorContactScreen() {
                   Reason: {REPORT_REASONS.find((r) => r.value === reportReason)?.label ?? reportReason}
                 </Text>
                 <Text style={styles.confirmText}>Details: {reportDetails.trim()}</Text>
+                {reportReason === 'other' ? (
+                  <Text style={styles.confirmText}>Other reason: {reportOtherReason.trim()}</Text>
+                ) : null}
+                <Text style={styles.confirmText}>Warning: {warningEnabled ? 'On (issued with report)' : 'Off'}</Text>
                 <View style={styles.confirmRow}>
                   <Pressable
                     style={[styles.primaryButton, styles.confirmButton, reportSending && styles.primaryButtonDisabled]}
@@ -324,6 +408,19 @@ export default function CollectorContactScreen() {
                         </Pressable>
                       ))}
                     </View>
+                    {editReason === 'other' ? (
+                      <>
+                        <Text style={styles.label}>Other Reason</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={editOtherReason}
+                          onChangeText={setEditOtherReason}
+                          placeholder="Specify other reason..."
+                          placeholderTextColor="#999"
+                          maxLength={OTHER_REASON_MAX}
+                        />
+                      </>
+                    ) : null}
                     <Text style={styles.label}>Details</Text>
                     <TextInput
                       style={[styles.input, styles.messageInput]}
@@ -440,6 +537,20 @@ const styles = StyleSheet.create({
   },
   reasonTextActive: {
     color: '#1F7A37',
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F6F9F6',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E1E1E1',
+    padding: 12,
+  },
+  warningRowText: {
+    flex: 1,
+    gap: 2,
   },
   composeBox: {
     gap: 8,

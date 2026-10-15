@@ -176,6 +176,10 @@ export function checkPurokMatch(
   return null;
 }
 export function warningLevelForCount(count: number): string { if (count <= 1) return 'First Warning'; if (count === 2) return 'Second Warning'; return 'Final Warning'; }
+// The three levels of the single warning ladder. Used to count existing
+// warnings wherever a "next warning" must be derived (collection warnings
+// carry a collectionEntryId; warnings issued from the Report form do not).
+export const WARNING_LEVELS = ['First Warning', 'Second Warning', 'Final Warning'] as const;
 export function nextWarningLevelForCount(count: number): string { return warningLevelForCount(count + 1); }
 export function warningOrdinal(count: number): string { if (count === 1) return 'first'; if (count === 2) return 'second'; if (count === 3) return 'third'; return `${count}th`; }
 export function buildWarningText(level: string, count: number, timestamp: Date, weightKg: unknown): { title: string; message: string } {

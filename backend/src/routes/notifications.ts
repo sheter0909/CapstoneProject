@@ -3,7 +3,7 @@ import { prisma } from '../db.js';
 import { created, fail, ok } from '../response.js';
 import { requireAuth, validateRequest } from '../middleware.js';
 import { idParam, notificationFields, pagination, editAnnouncementFields } from '../validators.js';
-import { NOTIFICATION_LIST_SELECT, checkPurokMatch, list, logActivity, resolveReportReason, REPORT_REASONS, editableUntilFor, EDIT_WINDOW_HOURS } from './helpers.js';
+import { NOTIFICATION_LIST_SELECT, checkPurokMatch, list, logActivity, resolveReportReason, REPORT_REASONS, editableUntilFor, EDIT_WINDOW_HOURS, warningLevelForCount, warningOrdinal, WARNING_LEVELS } from './helpers.js';
 import { reconcileSkipEscalation } from './escalations.js';
 import { normalizePurokName } from './puroks.js';
 
@@ -19,6 +19,57 @@ function normalizePurok(raw: string): string {
   return normalizePurokName(raw);
 }
 
+const OTHER_REASON_MAX = 100;
+
+/**
+ * Extracts and validates the free-text "Other" reason when reportReason === 'other'.
+ * Accepts either an explicit `otherReason` body field or the `Other reason: ...`
+ * line embedded in `message` by the mobile app.
+ */
+function resolveOtherReasonInMessage(
+  rawMessage: string,
+  bodyOtherReason: unknown,
+): { ok: true; message: string } | { ok: false; error: string } {
+  const match = /(?:^|\n\n)Other reason:\s*([^\n]*)\s*$/.exec(rawMessage);
+  const fromBody = bodyOtherReason !== undefined && bodyOtherReason !== null ? String(bodyOtherReason).trim() : '';
+  const fromMessage = match ? match[1].trim() : '';
+  const otherText = fromBody || fromMessage;
+  if (!otherText) {
+    return { ok: false, error: 'Other reason is required when reason is "Other".' };
+  }
+  if (otherText.length > OTHER_REASON_MAX) {
+    return { ok: false, error: `Other reason must be at most ${OTHER_REASON_MAX} characters.` };
+  }
+  const baseMessage = match ? rawMessage.slice(0, match.index).trimEnd() : rawMessage;
+  return { ok: true, message: `${baseMessage}\n\nOther reason: ${otherText}`.slice(0, 2000) };
+}
+
+/**
+ * Warning text for a warning issued alongside a collector report. The level
+ * comes from the same First -> Second -> Final ladder the collections route
+ * uses (warningLevelForCount); the wording mirrors buildWarningText in
+ * helpers.ts but references the report instead of a non-segregated
+ * collection, since no collection happened for report-based warnings.
+ */
+function buildReportWarningText(
+  level: string,
+  count: number,
+  reason: string,
+  reasonLabelFromLevel: string,
+): { title: string; message: string } {
+  const date = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  // Prefer the label the collector actually saw on the form ("Report: Skip"
+  // -> "Skip"); fall back to the reason's display label for odd clients.
+  const reasonLabel = reasonLabelFromLevel || (reason === 'dirty_surroundings' ? 'Dirty surroundings' : 'Skip');
+  const advice =
+    reason === 'dirty_surroundings'
+      ? 'Please keep your surroundings clean and segregate your waste properly.'
+      : 'Please put out your garbage on your scheduled collection day so it can be collected.';
+  const title = `Household Warning - ${level}`.slice(0, 120);
+  const message = `A "${reasonLabel}" report was filed for your household on ${date}. This is your ${warningOrdinal(count)} warning (${level}). ${advice}`.slice(0, 2000);
+  return { title, message };
+}
+
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 async function sendNotification(req: Request, res: Response, next: NextFunction) {
@@ -26,7 +77,7 @@ async function sendNotification(req: Request, res: Response, next: NextFunction)
     const sender = req.user!;
     const recipientType = String(req.body.recipientType);
     const title = String(req.body.title).trim();
-    const message = String(req.body.message).trim();
+    let message = String(req.body.message).trim();
     const level = String(req.body.level ?? 'General').trim() || 'General';
 
     if (sender.role === 'collector' && (recipientType === 'collector' || recipientType === 'all-collectors')) {
@@ -41,6 +92,9 @@ async function sendNotification(req: Request, res: Response, next: NextFunction)
     let targetPurok: string | null = null;
     let targetPurokId: string | null = null;
     let reportReason: string | null = null;
+    // Set only for eligible collector reports (see below); everything else
+    // silently ignores the client's issueWarning flag.
+    let wantsWarning = false;
 
     if (recipientType === 'household') {
       const target = String(req.body.householdId ?? '').trim();
@@ -66,7 +120,20 @@ async function sendNotification(req: Request, res: Response, next: NextFunction)
         const collector = await prisma.garbageCollector.findUnique({ where: { collectorId: sender.id } });
         const purokError = checkPurokMatch(collector?.purokId, exists.purokId);
         if (purokError) return fail(res, 403, purokError);
+        if (reason === 'other') {
+          const otherCheck = resolveOtherReasonInMessage(message, req.body.otherReason);
+          if (!otherCheck.ok) {
+            return fail(res, 422, otherCheck.error, [{ field: 'otherReason', message: otherCheck.error }]);
+          }
+          message = otherCheck.message;
+        }
         reportReason = reason;
+        // The Report form's warning toggle applies only to "Skip"
+        // (no_garbage_out) and "Contamination" (dirty_surroundings) reports;
+        // "Other" (or no flag at all) never issues a warning.
+        if (req.body.issueWarning === true && (reason === 'no_garbage_out' || reason === 'dirty_surroundings')) {
+          wantsWarning = true;
+        }
       }
     }
 
@@ -112,21 +179,66 @@ async function sendNotification(req: Request, res: Response, next: NextFunction)
       }
     }
 
-    const notification = await prisma.notification.create({
-      data: {
-        householdId,
-        collectorId,
-        targetPurok,
-        targetPurokId,
-        senderId: sender.id,
-        senderRole: sender.role,
-        senderName: sender.name ?? sender.role,
-        recipientType,
-        title,
-        message,
-        level,
-        ...(reportReason ? { reportReason } : {}),
-      },
+    const notification = await prisma.$transaction(async (tx) => {
+      const createdNote = await tx.notification.create({
+        data: {
+          householdId,
+          collectorId,
+          targetPurok,
+          targetPurokId,
+          senderId: sender.id,
+          senderRole: sender.role,
+          senderName: sender.name ?? sender.role,
+          recipientType,
+          title,
+          message,
+          level,
+          ...(reportReason ? { reportReason } : {}),
+        },
+      });
+      if (wantsWarning && householdId && reportReason) {
+        // Reuse the single existing warning ladder (First -> Second -> Final
+        // Warning from warningLevelForCount): the count continues from the
+        // household's not-segregated collections plus warnings already issued
+        // from reports, so the next report warning picks up exactly where the
+        // collection warnings left off. Collection warnings always carry a
+        // collectionEntryId; report warnings never do.
+        const [notSegregatedCount, priorReportWarnings] = await Promise.all([
+          tx.collectionEntry.count({ where: { householdId, segregationStatus: 'not_segregated' } }),
+          tx.notification.count({
+            where: {
+              householdId,
+              senderRole: 'collector',
+              collectionEntryId: null,
+              level: { in: [...WARNING_LEVELS] },
+            },
+          }),
+        ]);
+        const count = notSegregatedCount + priorReportWarnings + 1;
+        const warningLevel = warningLevelForCount(count);
+        const labelFromLevel = /^report:/i.test(level) ? level.replace(/^report:\s*/i, '').trim() : '';
+        const warning = buildReportWarningText(warningLevel, count, reportReason, labelFromLevel);
+        await tx.notification.create({
+          data: {
+            householdId,
+            senderId: sender.id,
+            senderRole: 'collector',
+            senderName: sender.name ?? sender.role,
+            recipientType: 'household',
+            title: warning.title,
+            message: warning.message,
+            level: warningLevel,
+          },
+        });
+        await tx.activityLog.create({
+          data: {
+            user: sender.name ?? 'Collector',
+            activityType: 'Household Warned',
+            description: `Issued ${warningLevel} to household ${householdId}`,
+          },
+        });
+      }
+      return createdNote;
     });
     if (reportReason && householdId) {
       // Skip-streak escalation must never block saving the report.
@@ -306,11 +418,20 @@ async function updateOwnReport(req: Request, res: Response, next: NextFunction) 
         { field: 'reportReason', message: `Reason must be one of: ${(REPORT_REASONS as readonly string[]).join(', ')}.` },
       ]);
     }
+    const effectiveReason = reason ?? resolveReportReason(existing!.level, existing!.reportReason);
+    let nextMessage = req.body.message !== undefined ? String(req.body.message).trim() : undefined;
+    if (effectiveReason === 'other' && (nextMessage !== undefined || req.body.otherReason !== undefined)) {
+      const otherCheck = resolveOtherReasonInMessage(nextMessage ?? existing!.message, req.body.otherReason);
+      if (!otherCheck.ok) {
+        return fail(res, 422, otherCheck.error, [{ field: 'otherReason', message: otherCheck.error }]);
+      }
+      nextMessage = otherCheck.message;
+    }
     const updated = await prisma.notification.update({
       where: { id: existing!.id },
       data: {
         ...(req.body.title !== undefined ? { title: String(req.body.title).trim() } : {}),
-        ...(req.body.message !== undefined ? { message: String(req.body.message).trim() } : {}),
+        ...(nextMessage !== undefined ? { message: nextMessage } : {}),
         ...(reason ? { reportReason: reason } : {}),
         editedAt: new Date(),
       },

@@ -130,6 +130,10 @@ export type SendNotificationBody = {
   collectorId?: string;
   level?: string;
   reportReason?: ReportReason;
+  // Collector report form: also issue the household a warning from the
+  // existing First -> Second -> Final ladder. Ignored by the server unless
+  // the report reason is eligible (Skip / Contamination).
+  issueWarning?: boolean;
 };
 
 const RETRY_DELAYS_MS = [3_000];
