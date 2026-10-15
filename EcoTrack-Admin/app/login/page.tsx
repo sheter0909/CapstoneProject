@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 
@@ -40,7 +41,7 @@ export default function Login() {
       {/* Left panel */}
       <div className="hidden md:flex w-1/2 flex-col justify-between bg-[#0F6B4B] px-12 py-10 text-white">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="EcoTrack logo" className="h-14 w-14 rounded-2xl object-contain drop-shadow-sm" />
+          <Image src="/logo.png" alt="EcoTrack logo" width={56} height={56} className="h-14 w-14 rounded-2xl object-contain drop-shadow-sm" />
           <div>
             <p className="text-xl font-bold leading-tight">EcoTrack</p>
             <p className="text-[11px] tracking-wide text-emerald-100/70">Admin Web Portal</p>
@@ -100,7 +101,7 @@ export default function Login() {
       <div className="flex w-full md:w-1/2 items-center justify-center bg-[#E0EDE5] px-4">
         <div className="w-full max-w-[520px] rounded-2xl bg-[#EAF3EC] p-6 sm:p-12 shadow-[0_8px_30px_rgba(15,107,75,0.12)]">
           <div className="mb-6 flex md:hidden items-center gap-3">
-            <img src="/logo.png" alt="EcoTrack logo" className="h-12 w-12 rounded-xl object-contain drop-shadow-sm" />
+            <Image src="/logo.png" alt="EcoTrack logo" width={48} height={48} className="h-12 w-12 rounded-xl object-contain drop-shadow-sm" />
             <div>
               <p className="text-xl font-bold leading-tight text-gray-900">EcoTrack</p>
               <p className="text-xs text-gray-500">Admin Web Portal</p>

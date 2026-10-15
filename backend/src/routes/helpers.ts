@@ -50,7 +50,7 @@ export const NOTIFICATION_LIST_SELECT: Record<string, boolean> = {
 };
 
 // Collector household-report reasons (Notification.reportReason).
-// Labels: no_garbage_out -> "No garbage out", dirty_surroundings -> "Dirty surroundings".
+// Labels: no_garbage_out -> "Skip", dirty_surroundings -> "Dirty surroundings".
 export const REPORT_REASONS = ['no_garbage_out', 'dirty_surroundings', 'other'] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];
 

@@ -17,7 +17,6 @@ export default function ActivityLogPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [activities, setActivities] = useState<Activity[]>([]);
-  
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
@@ -35,7 +34,7 @@ export default function ActivityLogPage() {
       return;
     }
 
-    const query = `?limit=100`;
+    const query = '?limit=100';
     void adminApi
       .activityLogs(query)
       .then((result) =>
@@ -53,8 +52,6 @@ export default function ActivityLogPage() {
       .catch(() => setActivities([]))
       .finally(() => setIsLoading(false));
   }, [router]);
-
-  const filteredActivities = activities;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -107,13 +104,13 @@ export default function ActivityLogPage() {
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="p-6 border-b border-gray-200">
             <h3 className="text-xl font-bold text-gray-800">
-              Recent Activities ({filteredActivities.length})
+              Recent Activities ({activities.length})
             </h3>
           </div>
 
-          {filteredActivities.length === 0 ? (
+          {activities.length === 0 ? (
             <div className="p-6 text-center text-gray-500">
-              <p>No activities found for this filter.</p>
+              <p>No activities found.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -128,7 +125,7 @@ export default function ActivityLogPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredActivities.map((activity) => (
+                  {activities.map((activity) => (
                     <tr key={activity.id} className="border-b border-gray-200 hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm text-gray-800 font-medium">{activity.user}</td>
                       <td className="px-6 py-4 text-sm text-gray-800">{activity.type}</td>
