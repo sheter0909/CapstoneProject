@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type TextStyle } from 'react-native';
 import { Spacing } from '@/constants/theme';
+import { AREA_NAME } from '@/constants/area';
 import { ApiError, CollectionHistoryItem, collectorApi, HouseholdUser } from '@/lib/api';
 import { toWasteTypeLabel } from '@/lib/labels';
 import { safeBack } from '@/lib/navigation';
@@ -60,7 +61,7 @@ export default function GarbageCollectorScanResultsScreen() {
   }, [router, targetId]);
 
   const name = household?.fullName || `Household ${targetId}`;
-  const address = [household?.purok, household?.address].filter(Boolean).join(', ') || 'Not specified';
+  const address = [AREA_NAME, household?.purok].filter(Boolean).join(' • ') || 'Not specified';
   const status = household?.status ? household.status.toUpperCase() : 'ACTIVE';
   const lastVisit = history[0] ? new Date(history[0].timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   const { width: screenWidth } = useWindowDimensions();
@@ -162,7 +163,7 @@ export default function GarbageCollectorScanResultsScreen() {
                 });
               }}
             >
-              <Text style={styles.flagButtonText}>Flag Household (No garbage out / Report)</Text>
+              <Text style={styles.flagButtonText}>Flag Household (Skip / Report)</Text>
             </Pressable>
           </>
         )}

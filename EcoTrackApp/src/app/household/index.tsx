@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
+import { AREA_NAME } from '@/constants/area';
 import { AppButton, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/context/auth';
 import { CollectionHistoryItem, HouseholdHistoryRow, householdApi, NotificationItem } from '@/lib/api';
@@ -53,7 +54,9 @@ export default function HouseholdHomeScreen() {
   const displayName = householdUser?.fullName || 'Household Member';
   const displayInitial = (displayName.trim().charAt(0) || 'H').toUpperCase();
   const displaySubtitle =
-    [householdUser?.purok, householdUser?.address].filter(Boolean).join(' • ')
+    // "<Area> • <Purok>": area is the shared barangay constant, purok is the
+    // household's own purok record. Missing parts drop the bullet cleanly.
+    [AREA_NAME, householdUser?.purok].filter(Boolean).join(' • ')
     || 'Community Resident';
   const displayId = householdUser?.householdId || 'Pending';
   const latestIsDirtyReport = latestHistory?.kind === 'report' && latestHistory.reason === 'dirty_surroundings';

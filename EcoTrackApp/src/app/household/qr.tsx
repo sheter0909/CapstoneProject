@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { Spacing } from '@/constants/theme';
+import { AREA_NAME } from '@/constants/area';
 import { useAuth } from '@/context/auth';
 import { safeBack } from '@/lib/navigation';
 
@@ -11,7 +12,7 @@ export default function HouseholdQrScreen() {
 
   const householdId = householdUser?.householdId || '0123';
   const fullName = householdUser?.fullName || 'Household Member';
-  const address = [householdUser?.purok, householdUser?.address].filter(Boolean).join(', ') || 'Community Resident';
+  const address = [AREA_NAME, householdUser?.purok].filter(Boolean).join(' • ') || 'Community Resident';
   // QR contract: `household-{householdId}` only. The scanner splits on '-' and
   // reads segments[1], so no suffix (address, commas, extra dashes) may be appended.
   const qrData = `household-${householdId}`;
