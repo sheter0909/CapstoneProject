@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { prisma } from '../db.js';
-import { created, fail, ok } from '../response.js';
+import { fail, ok } from '../response.js';
 import { requireAuth, validateRequest } from '../middleware.js';
 import { idParam, pagination } from '../validators.js';
 import { computeSkipStreak, type SkipStreakEvent } from '../skipStreak.js';

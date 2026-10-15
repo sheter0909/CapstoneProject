@@ -4,7 +4,7 @@ import { created, fail, ok } from '../response.js';
 import { requireAuth, validateRequest } from '../middleware.js';
 import { idParam } from '../validators.js';
 import { logActivity } from './helpers.js';
-import { body, param } from 'express-validator';
+import { body } from 'express-validator';
 
 export const purokRoutes = Router();
 
@@ -35,7 +35,7 @@ const purokNameBody = body('name')
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 /** GET /puroks  — list all puroks (active first, then alphabetically). */
-async function listPuroks(req: Request, res: Response, next: NextFunction) {
+async function listPuroks(_req: Request, res: Response, next: NextFunction) {
   try {
     const puroks = await prisma.purok.findMany({
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
