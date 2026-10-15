@@ -90,7 +90,7 @@ export default function GarbageCollectorsPage() {
   const [formErrors, setFormErrors] = useState<{ id?: string; name?: string; zone?: string; birthdate?: string; password?: string }>({});
   const [originalCollectorId, setOriginalCollectorId] = useState<string | null>(null);
 
-  const bumpId = (prefix: 'GC', id: string) => {
+  const bumpId = (id: string) => {
     const n = Number(id.match(/^GC-(\d+)$/i)?.[1] ?? 0);
     return `GC-${String(n + 1).padStart(4, '0')}`;
   };
@@ -103,7 +103,7 @@ export default function GarbageCollectorsPage() {
       if (current) {
         const cur = Number(current.match(/^GC-(\d+)$/i)?.[1] ?? 0);
         const got = Number(id.match(/^GC-(\d+)$/i)?.[1] ?? 0);
-        if (got <= cur) return bumpId('GC', current);
+        if (got <= cur) return bumpId(current);
       }
       return id;
     } catch {

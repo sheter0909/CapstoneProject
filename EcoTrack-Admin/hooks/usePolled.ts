@@ -105,7 +105,6 @@ export function usePolled<T>(
       }
     };
   // version is intentionally a dep so refetch() re-runs the effect.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, intervalMs, version]);
 
   return { data, isLoading, isRefreshing, error, lastUpdated, refetch };

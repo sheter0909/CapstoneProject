@@ -63,7 +63,7 @@ function isCollectorHouseholdReport(note: AdminNotification): boolean {
 }
 
 const REPORT_REASON_LABELS: Record<string, string> = {
-  no_garbage_out: 'No garbage out',
+  no_garbage_out: 'Skip',
   dirty_surroundings: 'Dirty surroundings',
   other: 'Other',
 };
@@ -1194,7 +1194,7 @@ function MessagesContent() {
                 aria-label="Filter reports by reason"
               >
                 <option value="">All reasons</option>
-                <option value="no_garbage_out">No garbage out</option>
+                <option value="no_garbage_out">Skip</option>
                 <option value="dirty_surroundings">Dirty surroundings</option>
                 <option value="other">Other</option>
               </select>
