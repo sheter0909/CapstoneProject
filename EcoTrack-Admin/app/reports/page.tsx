@@ -513,14 +513,14 @@ export default function ReportsPage() {
                 <div className="bg-white rounded-lg shadow-lg p-6">
                   <h3 className="text-xl font-bold text-gray-800 mb-6">Monthly Performance</h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
+                    <table className="w-full min-w-[640px]">
+                      <thead className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                         <tr>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Month</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Total Collected (kg)</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Households Active</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Recycled Rate</th>
-                          <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Trend</th>
+                          <th className="whitespace-nowrap px-6 py-3">Month</th>
+                          <th className="whitespace-nowrap px-6 py-3">Total Collected (kg)</th>
+                          <th className="whitespace-nowrap px-6 py-3">Households Active</th>
+                          <th className="whitespace-nowrap px-6 py-3">Recycled Rate</th>
+                          <th className="whitespace-nowrap px-6 py-3">Trend</th>
                         </tr>
                       </thead>
                       <tbody>

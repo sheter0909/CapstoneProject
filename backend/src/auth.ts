@@ -5,7 +5,7 @@ import { prisma } from './db.js';
 import { config } from './config.js';
 import type { Role } from './middleware.js';
 
-type Account = { id: string; fullName?: string; name?: string; email?: string; householdId?: string; collectorId?: string; password: string; status?: string };
+type Account = { id: string; fullName?: string; name?: string; email?: string; householdId?: string; collectorId?: string; adminId?: string; password: string; status?: string };
 
 const ENCRYPTION_KEY = crypto.scryptSync(config.jwtSecret, 'ecotrack-password-salt', 32);
 
@@ -54,7 +54,7 @@ export async function login(role: Role, identifier: string, rawPassword: string)
     ? account.householdId!
     : role === 'collector'
       ? account.collectorId!
-      : account.id;
+      : (account.adminId || account.id || account.email || '');
 
   return {
     token: await issueToken(id, role, account.fullName ?? account.name),

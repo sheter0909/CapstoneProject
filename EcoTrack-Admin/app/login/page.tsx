@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminApi } from '@/lib/api';
 
@@ -11,6 +11,11 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    // Fire-and-forget: warm up backend instance and database connection on login mount
+    adminApi.healthDb();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,10 +39,10 @@ export default function Login() {
     <main className="flex min-h-screen">
       {/* Left panel */}
       <div className="hidden md:flex w-1/2 flex-col justify-between bg-[#0F6B4B] px-12 py-10 text-white">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="EcoTrack logo" className="h-11 w-11 rounded-xl object-cover" />
+        <div className="flex items-center gap-4">
+          <img src="/logo.png" alt="EcoTrack logo" className="h-14 w-14 rounded-2xl object-contain drop-shadow-sm" />
           <div>
-            <p className="text-xl font-semibold leading-tight">EcoTrack</p>
+            <p className="text-xl font-bold leading-tight">EcoTrack</p>
             <p className="text-[11px] tracking-wide text-emerald-100/70">Admin Web Portal</p>
           </div>
         </div>
@@ -94,6 +99,13 @@ export default function Login() {
       {/* Right panel */}
       <div className="flex w-full md:w-1/2 items-center justify-center bg-[#E0EDE5] px-4">
         <div className="w-full max-w-[520px] rounded-2xl bg-[#EAF3EC] p-6 sm:p-12 shadow-[0_8px_30px_rgba(15,107,75,0.12)]">
+          <div className="mb-6 flex md:hidden items-center gap-3">
+            <img src="/logo.png" alt="EcoTrack logo" className="h-12 w-12 rounded-xl object-contain drop-shadow-sm" />
+            <div>
+              <p className="text-xl font-bold leading-tight text-gray-900">EcoTrack</p>
+              <p className="text-xs text-gray-500">Admin Web Portal</p>
+            </div>
+          </div>
           <h2 className="text-[28px] sm:text-4xl font-semibold text-gray-800">Welcome to EcoTrack</h2>
           <p className="mt-2 mb-8 text-base text-gray-500">Secure access for environmental officers.</p>
 
@@ -120,7 +132,7 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full h-14 bg-[#E4F1E7] pl-12 pr-4 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-600 placeholder:text-gray-400"
-                  placeholder="admin@ecotrack.gov"
+                  placeholder="admin@ecotrack.local"
                   required
                 />
               </div>

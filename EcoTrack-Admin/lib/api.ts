@@ -65,7 +65,27 @@ interface CollectorCollectionHistory {
   collections: CollectorCollectionRecord[];
 }
 
-export type NotificationRecipientType = 'household' | 'collector' | 'all-households' | 'all-collectors';
+export type NotificationRecipientType = 'household' | 'collector' | 'all-households' | 'all-collectors' | 'purok-households';
+
+export interface RecipientOption {
+  id: string;
+  label: string;
+}
+
+export interface Purok {
+  id: string;
+  name: string;
+  collectionDay?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurokHouseholdCount {
+  purokId: string;
+  purokName: string;
+  activeHouseholds: number;
+}
 
 export interface AdminNotification {
   id: string;
@@ -75,12 +95,38 @@ export interface AdminNotification {
   senderRole: string;
   senderName: string;
   recipientType: string;
+  targetPurok?: string | null;
+  targetPurokId?: string | null;
   title: string;
   message: string;
   level: string;
   read: boolean;
+  reportReason?: 'no_garbage_out' | 'dirty_surroundings' | 'other' | null;
+  dismissedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  editedAt?: string | null;
+}
+
+export interface SkipEscalation {
+  id: string;
+  householdId: string;
+  level: 'review' | 'follow_up' | string;
+  streak: number;
+  streakStart: string;
+  status: 'open' | 'resolved' | 'dismissed' | string;
+  resolutionNote?: string | null;
+  dismissReason?: string | null;
+  actedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SkipDetail {
+  date: string;
+  timestamp: string;
+  collectorId: string | null;
+  collectorName: string | null;
 }
 
 interface ActivityLogRecord {
@@ -167,8 +213,15 @@ async function requestOnce<T>(path: string, options: RequestInit): Promise<T> {
   }
 
   if (!response.ok || !payload?.success) {
-    const errorMsg = payload?.message ?? `API request failed (${response.status} ${response.statusText}).`;
     const fieldErrors = Array.isArray(payload?.errors) ? (payload.errors as FieldError[]) : undefined;
+    let errorMsg = payload?.message;
+    if (!errorMsg || errorMsg === 'Validation failed.' || errorMsg === 'Validation failed') {
+      if (fieldErrors && fieldErrors.length > 0) {
+        errorMsg = `Validation failed: ${fieldErrors.map((e) => (e.field ? `${e.field}: ${e.message}` : e.message)).join(', ')}`;
+      } else {
+        errorMsg = `API request failed (${response.status} ${response.statusText}).`;
+      }
+    }
     throw new ApiError(errorMsg, response.status, fieldErrors);
   }
 
@@ -217,7 +270,10 @@ export const adminApi = {
   createCollector: (body: unknown) => apiRequest<unknown>('/collectors', { method: 'POST', body: JSON.stringify(body) }),
   updateCollector: (id: string, body: unknown) => apiRequest<unknown>(`/collectors/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
   households: (query = '') => apiRequest<unknown>(`/households${query}`),
+  household: (id: string) => apiRequest<{ householdId: string; violationCount?: number; skipStreak?: number; needsFollowUp?: boolean }>(`/households/${encodeURIComponent(id)}`),
   collectors: (query = '') => apiRequest<unknown>(`/collectors${query}`),
+  nextCollectorId: () => apiRequest<{ id: string }>('/collectors/next-id'),
+  nextHouseholdId: () => apiRequest<{ id: string }>('/households/next-id'),
   archiveHousehold: (id: string) => apiRequest<unknown>(`/households/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
   unarchiveHousehold: (id: string) => apiRequest<unknown>(`/households/${encodeURIComponent(id)}/unarchive`, { method: 'PATCH' }),
   archiveCollector: (id: string) => apiRequest<unknown>(`/collectors/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
@@ -235,9 +291,26 @@ export const adminApi = {
   reportWasteTypeDistribution: (query = '') => apiRequest<{ _id: string; weightKg: number }[]>(`/reports/waste-type-distribution${query}`),
   reportMonthlyPerformance: (query = '') => apiRequest<{ _id: string; totalKg: number }[]>(`/reports/monthly-performance${query}`),
   notifications: (query = '') => apiRequest<{ items: AdminNotification[]; total: number; page: number; totalPages: number }>(`/notifications${query}`),
-  sendNotification: (body: { title: string; message: string; recipientType: NotificationRecipientType; householdId?: string; collectorId?: string; level?: string }) =>
+  householdOptions: () => apiRequest<RecipientOption[]>('/households/options'),
+  collectorOptions: () => apiRequest<RecipientOption[]>('/collectors/options'),
+  sendNotification: (body: { title: string; message: string; recipientType: NotificationRecipientType; householdId?: string; collectorId?: string; targetPurokId?: string; level?: string }) =>
     apiRequest<AdminNotification>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+  updateAnnouncement: (id: string, body: { title: string; message: string; level?: string }) =>
+    apiRequest<AdminNotification>(`/announcements/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
   markNotificationRead: (id: string) => apiRequest<AdminNotification>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
   statsSummary: () => apiRequest<StatsSummary>('/stats/summary'),
+  escalations: (query = '') => apiRequest<{ items: SkipEscalation[]; total: number; page: number; totalPages: number }>(`/escalations${query}`),
+  escalationDetail: (id: string) => apiRequest<SkipEscalation & { liveStreak: number; skips: SkipDetail[] }>(`/escalations/${encodeURIComponent(id)}`),
+  resolveEscalation: (id: string, note?: string) => apiRequest<SkipEscalation>(`/escalations/${encodeURIComponent(id)}/resolve`, { method: 'POST', body: JSON.stringify({ note: note ?? '' }) }),
+  dismissEscalation: (id: string, reason: string) => apiRequest<SkipEscalation>(`/escalations/${encodeURIComponent(id)}/dismiss`, { method: 'POST', body: JSON.stringify({ reason }) }),
   health: () => fetch(`${API_URL}/health`).then(() => undefined).catch(() => undefined),
+  healthDb: () => fetch(`${API_URL}/health/db`).then(() => undefined).catch(() => undefined),
+  // ── Puroks ──────────────────────────────────────────────────────────────────
+  puroks: () => apiRequest<Purok[]>('/puroks'),
+  purokHouseholdCount: (id: string) => apiRequest<PurokHouseholdCount>(`/puroks/${encodeURIComponent(id)}/household-count`),
+  createPurok: (body: { name: string; collectionDay?: string }) => apiRequest<Purok>('/puroks', { method: 'POST', body: JSON.stringify(body) }),
+  updatePurok: (id: string, body: { name?: string; collectionDay?: string | null; isActive?: boolean }) =>
+    apiRequest<Purok>(`/puroks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deactivatePurok: (id: string) => apiRequest<Purok>(`/puroks/${encodeURIComponent(id)}/deactivate`, { method: 'PATCH' }),
+  activatePurok: (id: string) => apiRequest<Purok>(`/puroks/${encodeURIComponent(id)}/activate`, { method: 'PATCH' }),
 };

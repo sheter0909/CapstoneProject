@@ -27,7 +27,7 @@ Mobile app:
 
 ## Env vars
 
-- Backend: `PORT`, `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGINS` (see `backend/.env.example`).
+- Backend: `PORT`, `DATABASE_URL` (pooled Neon URL), `DIRECT_URL` (direct Neon URL), `PROD_DB_HOST` (hostname only), `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGINS` (see `backend/.env.example`).
 - Admin: `NEXT_PUBLIC_API_URL` (see `EcoTrack-Admin/.env.example`).
 - App: `EXPO_PUBLIC_API_URL` (see `EcoTrackApp/.env.example`).
 

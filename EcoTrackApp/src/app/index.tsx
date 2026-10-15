@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import { AppButton, AppTextInput, Card, Field, PasswordField } from '@/components/ui';
 import { useAuth, type LoginResult } from '@/context/auth';
+import { pingServerDb } from '@/lib/api';
 
 const APK_URL: string = process.env.EXPO_PUBLIC_APK_URL ?? '';
 const IS_WEB: boolean = Platform.OS === 'web';
@@ -36,6 +37,11 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Fire-and-forget: warm up backend instance and database connection on login mount
+    pingServerDb();
+  }, []);
 
   const handleLogin = async () => {
     setError('');

@@ -40,6 +40,20 @@ enum ActivityStatus {
   failed
 }
 
+/// A named purok / barangay area.  All households and collectors belong to one.
+model Purok {
+  id            String             @id @default(uuid())
+  name          String             @unique
+  collectionDay String?            // e.g. "Monday", optional
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  households         Household[]
+  garbageCollectors  GarbageCollector[]
+  notifications      Notification[]
+}
+
 model Household {
   id             String        @id @default(uuid())
   householdId    String        @unique
@@ -49,11 +63,17 @@ model Household {
   birthdate      String?
   status         AccountStatus @default(active)
   joinDate       DateTime      @default(now())
+  /// Legacy free-text field kept for backward compat; authoritative source is purokId.
   purok          String
   address        String
   lastCollection DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  purokId   String?
+  purokRef  Purok?  @relation(fields: [purokId], references: [id])
+
+  @@index([purokId])
 }
 
 model GarbageCollector {
@@ -65,10 +85,16 @@ model GarbageCollector {
   birthdate       String?
   status          AccountStatus @default(active)
   joinDate        DateTime      @default(now())
+  /// Legacy free-text field kept for backward compat; authoritative source is purokId.
   assignedArea    String
   contactNumber   String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  purokId   String?
+  purokRef  Purok?  @relation(fields: [purokId], references: [id])
+
+  @@index([purokId])
 }
 
 model Admin {
@@ -94,6 +120,9 @@ model CollectionEntry {
 
   @@index([householdId])
   @@index([collectorId])
+  @@index([householdId, timestamp(sort: Desc)])
+  @@index([collectorId, timestamp(sort: Desc)])
+  @@index([timestamp])
 }
 
 model Notification {
@@ -104,18 +133,33 @@ model Notification {
   senderRole    String   @default("admin")
   senderName    String   @default("Admin")
   recipientType String   @default("household")
+  // Legacy free-text purok — kept for backward compat. New code uses targetPurokId.
+  targetPurok   String?
+  // FK to Purok model; used for purok-targeted announcements.
+  targetPurokId String?
+  targetPurokRef Purok?  @relation(fields: [targetPurokId], references: [id])
   title         String
   message       String
   level         String   @default("Level 1 Reminder")
   read          Boolean  @default(false)
   collectionEntryId String?
+  // Collector household report reason: no_garbage_out | dirty_surroundings | other.
+  // Null for all non-report notifications (warnings, announcements, messages).
+  reportReason String?
+  // Soft-undo of a collector report (set instead of hard delete).
+  dismissedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  editedAt      DateTime?
 
   @@index([householdId])
   @@index([collectorId])
   @@index([recipientType])
+  @@index([targetPurok])
+  @@index([targetPurokId])
   @@index([collectionEntryId])
+  @@index([reportReason])
+  @@index([createdAt(sort: Desc)])
 }
 
 model ActivityLog {
@@ -127,4 +171,30 @@ model ActivityLog {
   timestamp    DateTime       @default(now())
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+
+  @@index([createdAt(sort: Desc)])
+}
+
+// Escalation items for households that repeatedly don't put out garbage.
+// Streaks are derived by query (see computeSkipStreak); this table only
+// stores the admin-facing items. Flag-and-notify only: nothing here feeds
+// the Violations count or the warning ladder.
+model SkipEscalation {
+  id             String   @id @default(uuid())
+  householdId    String
+  level          String   // 'review' (streak 3) | 'follow_up' (streak 5+)
+  streak         Int
+  // Timestamp of the first skip in the streak; identifies the streak so a
+  // streak that already had an item never gets a duplicate review item.
+  streakStart    DateTime
+  status         String   @default("open") // 'open' | 'resolved' | 'dismissed'
+  resolutionNote String?
+  dismissReason  String?
+  actedBy        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([householdId])
+  @@index([status])
+  @@index([householdId, status])
 }

@@ -6,7 +6,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "npx prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/skipStreak.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

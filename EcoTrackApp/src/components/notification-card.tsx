@@ -40,9 +40,16 @@ export function NotificationCard({ item, onMarkRead }: NotificationCardProps) {
             {item.level || 'Announcement'}
           </Text>
         </View>
-        <Text style={styles.timestamp} numberOfLines={1}>
-          {formatDateTime(item.createdAt)}
-        </Text>
+        <View style={styles.timeContainer}>
+          <Text style={styles.timestamp} numberOfLines={1}>
+            {formatDateTime(item.createdAt)}
+          </Text>
+          {item.editedAt ? (
+            <Text style={styles.editedText} numberOfLines={1}>
+              Edited • {formatDateTime(item.editedAt)}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       {!item.read && onMarkRead ? (
@@ -151,6 +158,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flexShrink: 0,
     textAlign: 'left',
+  },
+  timeContainer: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+  },
+  editedText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   actionRow: {
     marginTop: 2,

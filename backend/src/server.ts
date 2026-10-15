@@ -1,10 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import { connectDatabase } from './db.js';
+import { connectDatabase, logDatabaseTarget, prisma } from './db.js';
 import { config } from './config.js';
 import { handleError } from './middleware.js';
+import { ok, fail } from './response.js';
 import { router } from './routes.js';
+import { databaseErrorReason, logDatabaseError } from './dbDiagnostics.js';
 
 const app = express();
 function normalizeOrigin(origin: string): string {
@@ -48,10 +50,26 @@ const commit = (process.env.RENDER_GIT_COMMIT ?? 'local').slice(0, 7);
 app.get('/', (_req, res) => res.json({ status: 'ok', service: 'EcoTrack API', commit }));
 app.get('/health', (_req, res) => res.json({ status: 'ok', commit }));
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', commit }));
+// NOTE: Render uses /health as the platform health check — left untouched on
+// purpose (never touches the database). /health/db is the opt-in liveness probe
+// that runs SELECT 1. Callers invoke it fire-and-forget on login mount only;
+// it is deliberately never polled on a server-side interval.
+async function healthDb(_req: express.Request, res: express.Response) {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return ok(res, { status: 'ok', commit });
+  } catch (error) {
+    logDatabaseError('health check failed', error);
+    return fail(res, 503, 'Database unavailable.', undefined, databaseErrorReason(error));
+  }
+}
+app.get('/health/db', healthDb);
+app.get('/api/health/db', healthDb);
 app.use('/api', router);
 app.use(handleError);
 
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`EcoTrack API listening on http://0.0.0.0:${config.port}`);
-  connectDatabase().catch((error) => console.error('Database connection failed.', error));
+  logDatabaseTarget();
+  connectDatabase().catch((error) => logDatabaseError('startup connection failed', error));
 });

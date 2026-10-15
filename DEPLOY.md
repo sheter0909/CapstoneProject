@@ -50,7 +50,8 @@ Redeploy on Render afterwards. Never edit migrations that already applied.
 - Test: **Segregated** with no waste type → `422 "Choose a waste type."`.
 
 ## Required Render env vars
-`DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN=1d`,
-`NODE_ENV=production`, `CORS_ORIGINS` (must include `https://app.eco-track.online`
-and the admin Vercel URL). Never commit real secrets — values stay in the
-Render dashboard (`sync: false`).
+- `DATABASE_URL`: **Pooled** Neon connection string (hostname contains `-pooler`, e.g. `ep-xyz-pooler.region.neon.tech`). Used by the app at runtime.
+- `DIRECT_URL`: **Direct (non-pooled)** Neon connection string (hostname has **NO** `-pooler`, e.g. `ep-xyz.region.neon.tech`). Required by `npx prisma migrate deploy` in the build command so migrations can obtain advisory locks.
+- `JWT_SECRET`, `JWT_EXPIRES_IN=1d`, `NODE_ENV=production`, `CORS_ORIGINS` (must include `https://app.eco-track.online` and the admin Vercel URL).
+
+Never commit real secrets — values stay in the Render dashboard (`sync: false`).

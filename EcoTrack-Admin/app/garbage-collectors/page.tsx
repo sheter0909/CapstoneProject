@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Modal from '../../components/Modal';
-import { adminApi, ApiError, type CollectorCollectionRecord } from '../../lib/api';
+import Pagination from '../../components/Pagination';
+import { adminApi, ApiError, type CollectorCollectionRecord, type Purok } from '../../lib/api';
 import { useApiConnecting } from '../../lib/useApiConnecting';
 
 interface GarbageCollector {
@@ -13,6 +14,7 @@ interface GarbageCollector {
   email: string;
   phone: string;
   zone: string;
+  purokId?: string;
   joinDate: string;
   status: 'active' | 'inactive' | 'archived';
   previousStatus?: 'active' | 'inactive' | 'archived';
@@ -26,6 +28,7 @@ interface BackendCollectorAccount {
   fullName: string;
   contactNumber?: string | null;
   assignedArea: string;
+  purokId?: string | null;
   birthdate?: string | null;
   joinDate: string;
   status: 'active' | 'inactive' | 'archived';
@@ -33,6 +36,9 @@ interface BackendCollectorAccount {
 
 interface CollectorListResult {
   items?: BackendCollectorAccount[];
+  total?: number;
+  page?: number;
+  totalPages?: number;
 }
 
 export default function GarbageCollectorsPage() {
@@ -44,6 +50,8 @@ export default function GarbageCollectorsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<CollectorCollectionRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -54,41 +62,61 @@ export default function GarbageCollectorsPage() {
   const apiConnecting = useApiConnecting();
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [puroks, setPuroks] = useState<Purok[]>([]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const [formData, setFormData] = useState({
     id: '',
     name: '',
     email: '',
     phone: '',
     zone: '',
+    purokId: '',
     birthdate: '',
     password: '',
   });
   const [formErrors, setFormErrors] = useState<{ id?: string; name?: string; zone?: string; birthdate?: string; password?: string }>({});
   const [originalCollectorId, setOriginalCollectorId] = useState<string | null>(null);
 
-  const visibleCollectors = collectors.filter((collector) => collector.status !== 'archived');
+  const bumpId = (prefix: 'GC', id: string) => {
+    const n = Number(id.match(/^GC-(\d+)$/i)?.[1] ?? 0);
+    return `GC-${String(n + 1).padStart(4, '0')}`;
+  };
 
-  const filteredCollectors = visibleCollectors.filter((collector) => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return statusFilter === 'all' ? true : collector.status === statusFilter;
-    const nameMatch = collector.name.toLowerCase().includes(query);
-    const idMatch = collector.id.toLowerCase().includes(query);
-    const zoneMatch = collector.zone.toLowerCase().includes(query);
-    const matchesStatus = statusFilter === 'all' ? true : collector.status === statusFilter;
-    return (nameMatch || idMatch || zoneMatch) && matchesStatus;
-  });
-
-  const getUniqueCollectorId = useCallback(() => {
-    const existingNumbers = collectors
-      .map((collector) => {
-        const match = collector.id.match(/^GC-(\d+)$/i);
-        return match ? Number(match[1]) : 0;
-      })
-      .filter((n) => n > 0);
-
-    const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
-    return `GC-${String(nextNumber).padStart(4, '0')}`;
+  const fetchNextCollectorId = useCallback(async (current?: string) => {
+    try {
+      const { id } = await adminApi.nextCollectorId();
+      // Never return the same ID on Regenerate: the server is deterministic
+      // (max+1), so bump past the value already shown in the form.
+      if (current) {
+        const cur = Number(current.match(/^GC-(\d+)$/i)?.[1] ?? 0);
+        const got = Number(id.match(/^GC-(\d+)$/i)?.[1] ?? 0);
+        if (got <= cur) return bumpId('GC', current);
+      }
+      return id;
+    } catch {
+      // Fallback: client-side generation from visible collectors only
+      const existingNumbers = collectors
+        .map((collector) => {
+          const match = collector.id.match(/^GC-(\d+)$/i);
+          return match ? Number(match[1]) : 0;
+        })
+        .filter((n) => n > 0);
+      const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+      return `GC-${String(nextNumber).padStart(4, '0')}`;
+    }
   }, [collectors]);
 
   const [hasStoredSession] = useState(() => {
@@ -100,14 +128,17 @@ export default function GarbageCollectorsPage() {
     }
   });
 
-  useEffect(() => {
-    if (!hasStoredSession) {
-      router.push('/login');
-      return;
-    }
-
-    void (adminApi.collectors('?limit=100') as Promise<CollectorListResult>)
+  const loadCollectors = useCallback(() => {
+    setIsLoading(true);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(pageSize),
+      status: statusFilter,
+      ...(debouncedQuery ? { q: debouncedQuery } : {}),
+    });
+    void (adminApi.collectors(`?${params.toString()}`) as Promise<CollectorListResult>)
       .then((result) => {
+        setTotalCount(result.total ?? 0);
         const accounts = (result.items ?? []).map((account) => ({
           id: account.collectorId,
           dbId: account.id,
@@ -115,33 +146,48 @@ export default function GarbageCollectorsPage() {
           email: '',
           phone: account.contactNumber ?? '',
           zone: account.assignedArea,
+          purokId: account.purokId ?? undefined,
           birthdate: account.birthdate ?? '',
           joinDate: account.joinDate,
           status: account.status,
         }));
         setCollectors(accounts);
-        setSelectedCollector((previous) => previous ?? accounts[0] ?? null);
+        setSelectedCollector((previous) => (previous ? accounts.find((a) => a.id === previous.id) ?? accounts[0] ?? null : accounts[0] ?? null));
       })
       .catch((error: unknown) => setLoadError(error instanceof Error ? error.message : 'Unable to load collectors.'))
       .finally(() => setIsLoading(false));
-  }, [router, hasStoredSession]);
+  }, [page, pageSize, statusFilter, debouncedQuery]);
 
-  const openCreateCollectorModal = () => {
+  useEffect(() => {
+    if (!hasStoredSession) {
+      router.push('/login');
+      return;
+    }
+    loadCollectors();
+  }, [router, hasStoredSession, loadCollectors]);
+
+  useEffect(() => {
+    if (hasStoredSession) {
+      void adminApi.puroks().then((list) => setPuroks(list)).catch(() => {});
+    }
+  }, [hasStoredSession]);
+
+  const openCreateCollectorModal = async () => {
     resetFormState();
     setShowForm(true);
     setIsEditing(false);
     setOriginalCollectorId(null);
-    setFormData({ id: getUniqueCollectorId(), name: '', email: '', phone: '', zone: '', birthdate: '', password: '' });
+    const nextId = await fetchNextCollectorId();
+    setFormData({ id: nextId, name: '', email: '', phone: '', zone: '', purokId: '', birthdate: '', password: '' });
   };
 
   useEffect(() => {
     if (showForm && !isEditing && !formData.id) {
-      const id = getUniqueCollectorId();
-      void Promise.resolve().then(() => {
+      void fetchNextCollectorId().then((id) => {
         setFormData((prev) => (prev.id ? prev : { ...prev, id }));
       });
     }
-  }, [showForm, isEditing, formData.id, getUniqueCollectorId]);
+  }, [showForm, isEditing, formData.id, fetchNextCollectorId]);
 
   const resetFormState = () => {
     setShowForm(false);
@@ -149,13 +195,13 @@ export default function GarbageCollectorsPage() {
     setOriginalCollectorId(null);
     setShowPassword(false);
     setFormErrors({});
-    setFormData({ id: '', name: '', email: '', phone: '', zone: '', birthdate: '', password: '' });
+    setFormData({ id: '', name: '', email: '', phone: '', zone: '', purokId: '', birthdate: '', password: '' });
   };
 
   const handleAddCollector = async (e: FormEvent) => {
     e.preventDefault();
 
-    const idValue = formData.id.trim() || getUniqueCollectorId();
+    const idValue = formData.id.trim() || await fetchNextCollectorId();
     const nextErrors: { id?: string; name?: string; zone?: string; password?: string } = {};
     if (!idValue) {
       nextErrors.id = 'Collector ID is required';
@@ -165,7 +211,7 @@ export default function GarbageCollectorsPage() {
     if (!formData.name.trim()) {
       nextErrors.name = 'Full name is required';
     }
-    if (!formData.zone.trim()) {
+    if (!formData.zone.trim() && !formData.purokId) {
       nextErrors.zone = 'Assigned area is required';
     }
     if (formData.password && formData.password.length < 8) {
@@ -192,7 +238,7 @@ export default function GarbageCollectorsPage() {
     let account: BackendCollectorAccount;
     setIsSubmitting(true);
     try {
-      account = await adminApi.createCollector({ collectorId: idValue, fullName: formData.name.trim(), assignedArea: formData.zone.trim(), birthdate: formData.birthdate || undefined, contactNumber: formData.phone.trim() || undefined, password: formData.password }) as BackendCollectorAccount;
+      account = await adminApi.createCollector({ collectorId: idValue, fullName: formData.name.trim(), assignedArea: formData.zone.trim(), purokId: formData.purokId || undefined, birthdate: formData.birthdate || undefined, contactNumber: formData.phone.trim() || undefined, password: formData.password }) as BackendCollectorAccount;
     } catch (error) {
       if (error instanceof ApiError && error.errors && error.errors.length > 0) {
         const serverErrors: { id?: string; name?: string; zone?: string; password?: string } = {};
@@ -215,7 +261,7 @@ export default function GarbageCollectorsPage() {
     delete collectorWithoutPassword.password;
     // Keep the server record (including dbId): update/archive endpoints need the
     // database id, and without dbId they fall back to the human ID and 404.
-    const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, dbId: account.id, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, joinDate: account.joinDate, status: account.status };
+    const savedCollector: GarbageCollector = { ...collectorWithoutPassword, id: account.collectorId, dbId: account.id, name: account.fullName, phone: account.contactNumber ?? '', zone: account.assignedArea, purokId: account.purokId ?? formData.purokId ?? undefined, joinDate: account.joinDate, status: account.status };
     const updatedCollectors = [...collectors.filter((collector) => collector.id !== idValue), savedCollector];
     setCollectors(updatedCollectors);
     setSelectedCollector(savedCollector);
@@ -243,12 +289,14 @@ export default function GarbageCollectorsPage() {
   const handleEdit = (collector: GarbageCollector) => {
     setSelectedCollector(collector);
     setOriginalCollectorId(collector.id);
+    const matchedPurok = puroks.find((p) => p.id === collector.purokId || p.name.toLowerCase() === collector.zone.toLowerCase());
     setFormData({
       id: collector.id,
       name: collector.name,
       email: collector.email,
       phone: collector.phone,
-      zone: collector.zone,
+      zone: matchedPurok ? matchedPurok.name : collector.zone,
+      purokId: matchedPurok ? matchedPurok.id : (collector.purokId || ''),
       birthdate: collector.birthdate ?? '',
       password: '',
     });
@@ -277,7 +325,7 @@ export default function GarbageCollectorsPage() {
     if (!formData.name.trim()) {
       nextErrors.name = 'Full name is required';
     }
-    if (!formData.zone.trim()) {
+    if (!formData.zone.trim() && !formData.purokId) {
       nextErrors.zone = 'Assigned area is required';
     }
     if (formData.password && formData.password.length < 8) {
@@ -295,6 +343,7 @@ export default function GarbageCollectorsPage() {
         collectorId: formData.id.trim(),
         fullName: formData.name.trim(),
         assignedArea: formData.zone.trim(),
+        purokId: formData.purokId || undefined,
         contactNumber: formData.phone.trim() || undefined,
         birthdate: formData.birthdate || undefined,
         password: formData.password || undefined,
@@ -307,6 +356,7 @@ export default function GarbageCollectorsPage() {
         name: account.fullName,
         phone: account.contactNumber ?? '',
         zone: account.assignedArea,
+        purokId: account.purokId ?? formData.purokId ?? undefined,
         birthdate: account.birthdate ?? formData.birthdate,
         status: account.status,
       };
@@ -369,6 +419,58 @@ export default function GarbageCollectorsPage() {
     }
   };
 
+  const handleDeactivateCollector = async () => {
+    if (!selectedCollector || isDeactivating) return;
+    setIsDeactivating(true);
+    try {
+      const account = (await adminApi.archiveCollector(
+        selectedCollector.dbId || selectedCollector.id
+      )) as { status: GarbageCollector['status'] };
+      const updatedCollectors = collectors.map((collector) =>
+        collector.id === selectedCollector.id ? { ...collector, status: account.status } : collector
+      );
+      const updatedSelectedCollector = updatedCollectors.find((collector) => collector.id === selectedCollector.id);
+
+      setCollectors(updatedCollectors);
+      setSelectedCollector(updatedSelectedCollector ?? { ...selectedCollector, status: account.status });
+      setShowDeactivateConfirm(false);
+      setToastMessage('Collector deactivated successfully');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2200);
+    } catch (error) {
+      setShowDeactivateConfirm(false);
+      setToastMessage(error instanceof Error ? error.message : 'Unable to deactivate collector.');
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  const handleReactivateCollector = async () => {
+    if (!selectedCollector || isDeactivating) return;
+    setIsDeactivating(true);
+    try {
+      const account = (await adminApi.unarchiveCollector(
+        selectedCollector.dbId || selectedCollector.id
+      )) as { status: GarbageCollector['status'] };
+      const updatedCollectors = collectors.map((collector) =>
+        collector.id === selectedCollector.id ? { ...collector, status: account.status } : collector
+      );
+      const updatedSelectedCollector = updatedCollectors.find((collector) => collector.id === selectedCollector.id);
+
+      setCollectors(updatedCollectors);
+      setSelectedCollector(updatedSelectedCollector ?? { ...selectedCollector, status: account.status });
+      setToastMessage('Collector reactivated successfully');
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 2200);
+    } catch (error) {
+      setToastMessage(error instanceof Error ? error.message : 'Unable to reactivate collector.');
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 to-green-100">
@@ -381,7 +483,7 @@ export default function GarbageCollectorsPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto max-w-7xl 2xl:max-w-[1440px] px-4 py-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h2 className="mb-2 text-3xl font-bold text-gray-800">Garbage Collectors Management</h2>
@@ -438,7 +540,7 @@ export default function GarbageCollectorsPage() {
                     {!isEditing && (
                       <button
                         type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, id: getUniqueCollectorId() }))}
+                        onClick={() => void fetchNextCollectorId(formData.id).then((id) => setFormData((prev) => ({ ...prev, id })))}
                         className="rounded-2xl border border-green-100 bg-white px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                       >
                         Regenerate
@@ -466,22 +568,29 @@ export default function GarbageCollectorsPage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Assigned Purok/Area</label>
-                  <input
-                    type="text"
-                    list="zone-options"
-                    value={formData.zone}
-                    onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                    className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-gray-700 placeholder-gray-400 outline-none transition focus:border-green-400 focus:ring-2 focus:ring-green-100"
-                    placeholder="Enter assigned purok or area"
-                  />
-                  <datalist id="zone-options">
-                    <option value="Purok 1" />
-                    <option value="Purok 2" />
-                    <option value="Purok 3" />
-                    <option value="Purok 4" />
-                    <option value="Route A" />
-                    <option value="Route B" />
-                  </datalist>
+                  <select
+                    value={formData.purokId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const matched = puroks.find((p) => p.id === selectedId);
+                      setFormData({
+                        ...formData,
+                        purokId: selectedId,
+                        zone: matched ? matched.name : '',
+                      });
+                      if (formErrors.zone) setFormErrors((prev) => ({ ...prev, zone: undefined }));
+                    }}
+                    className={`w-full rounded-2xl border ${formErrors.zone ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500' : 'border-green-100 bg-green-50 focus:border-green-400'} px-4 py-3 text-sm text-gray-700 outline-none transition focus:ring-2 focus:ring-green-100`}
+                  >
+                    <option value="">Select a purok...</option>
+                    {puroks
+                      .filter((p) => p.isActive || p.id === formData.purokId)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}{p.collectionDay ? ` (${p.collectionDay})` : ''}
+                        </option>
+                      ))}
+                  </select>
                   {formErrors.zone && <p className="mt-2 text-sm text-rose-600">{formErrors.zone}</p>}
                 </div>
 
@@ -558,11 +667,11 @@ export default function GarbageCollectorsPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <div className="grid gap-6 xl:grid-cols-3">
+          <div className="xl:col-span-2">
             <div className="overflow-hidden rounded-[28px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
               <div className="border-b border-gray-100 p-6">
-                <h3 className="text-xl font-semibold text-gray-900">All Garbage Collectors ({filteredCollectors.length})</h3>
+                <h3 className="text-xl font-semibold text-gray-900">All Garbage Collectors ({totalCount ?? 0})</h3>
                 <p className="mt-1 text-sm text-gray-500">Select a collector to review the full profile.</p>
                 <div className="mt-4">
                   <input
@@ -582,7 +691,10 @@ export default function GarbageCollectorsPage() {
                   {(['all','active','inactive'] as const).map((filter) => (
                     <button
                       key={filter}
-                      onClick={() => setStatusFilter(filter)}
+                      onClick={() => {
+                        setStatusFilter(filter);
+                        setPage(1);
+                      }}
                       className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
                         statusFilter === filter ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
@@ -595,59 +707,80 @@ export default function GarbageCollectorsPage() {
 
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-sm text-gray-600">
-                  <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                  <thead className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                     <tr>
-                      <th className="px-4 py-3 sm:px-6">Collector ID</th>
-                      <th className="px-4 py-3 sm:px-6">Name</th>
-                      <th className="px-4 py-3 sm:px-6">Assigned Area</th>
-                      <th className="px-4 py-3 sm:px-6">Status</th>
-                      <th className="px-4 py-3 sm:px-6">Join Date</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-6">Collector ID</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-6">Name</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-6">Assigned Area</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-6">Status</th>
+                      <th className="whitespace-nowrap px-4 py-3 sm:px-6">Join Date</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCollectors.map((collector, index) => (
-                      <tr
-                        key={collector.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`View ${collector.name}`}
-                        onClick={() => {
-                          setSelectedCollector(collector);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setSelectedCollector(collector);
-                          }
-                        }}
-                        className={`cursor-pointer transition hover:bg-green-100/60 ${index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}`}
-                      >
-                        <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">{collector.id}</td>
-                        <td className="px-4 py-4 text-sm font-semibold text-gray-900 sm:px-6">{collector.name}</td>
-                        <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{collector.zone}</td>
-                        <td className="px-4 py-4 text-sm sm:px-6">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                              collector.status === 'active'
-                                ? 'bg-green-100 text-green-800'
-                                : collector.status === 'archived'
-                                ? 'bg-gray-200 text-gray-700'
-                                : 'bg-amber-100 text-amber-700'
-                            }`}
-                          >
-                            {collector.status}
-                          </span>
+                    {collectors.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500">
+                          {isLoading ? 'Loading collectors...' : 'No collectors found.'}
                         </td>
-                        <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{new Date(collector.joinDate).toLocaleDateString()}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      collectors.map((collector, index) => (
+                        <tr
+                          key={collector.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View ${collector.name}`}
+                          onClick={() => {
+                            setSelectedCollector(collector);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedCollector(collector);
+                            }
+                          }}
+                          className={`cursor-pointer transition hover:bg-green-100/60 ${index % 2 === 0 ? 'bg-white' : 'bg-green-50/40'}`}
+                        >
+                          <td className="px-4 py-4 text-sm text-gray-600 sm:px-6">{collector.id}</td>
+                          <td className="px-4 py-4 text-sm font-semibold text-gray-900 sm:px-6">{collector.name}</td>
+                          <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{collector.zone}</td>
+                          <td className="px-4 py-4 text-sm sm:px-6">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                collector.status === 'active'
+                                  ? 'bg-green-100 text-green-800'
+                                  : collector.status === 'archived'
+                                  ? 'bg-gray-200 text-gray-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}
+                            >
+                              {collector.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{new Date(collector.joinDate).toLocaleDateString()}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="border-t border-gray-100 bg-white px-4 py-5 sm:px-6">
+                <Pagination
+                  currentPage={page}
+                  pageSize={pageSize}
+                  totalItems={totalCount ?? 0}
+                  onPageChange={setPage}
+                  onPageSizeChange={(newSize) => {
+                    setPageSize(newSize);
+                    setPage(1);
+                  }}
+                />
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-1">
+          <div className="xl:col-span-1">
             {selectedCollector ? (
               <div className="rounded-[28px] border border-green-100 bg-white p-6 shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
                 <div className="rounded-[24px] border border-green-100 bg-green-50/70 p-4">
@@ -703,6 +836,20 @@ export default function GarbageCollectorsPage() {
                   </button>
 
                   <button
+                    onClick={() => {
+                      if (selectedCollector.status === 'archived' || selectedCollector.status === 'inactive') {
+                        void handleReactivateCollector();
+                      } else {
+                        setShowDeactivateConfirm(true);
+                      }
+                    }}
+                    disabled={isDeactivating}
+                    className="w-full rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {selectedCollector.status === 'archived' || selectedCollector.status === 'inactive' ? 'Reactivate' : 'Deactivate'}
+                  </button>
+
+                  <button
                     onClick={() => setShowArchiveConfirm(true)}
                     className="w-full rounded-2xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-600"
                   >
@@ -727,7 +874,28 @@ export default function GarbageCollectorsPage() {
       </div>
 
       <Modal
+        open={showDeactivateConfirm}
+        onClose={() => !isDeactivating && setShowDeactivateConfirm(false)}
+        title="Deactivate Collector?"
+        message={`Are you sure you want to deactivate ${selectedCollector?.name || 'this collector'}? They will no longer be able to log in. You can reactivate them later.`}
+        actions={[
+          {
+            label: 'Cancel',
+            onClick: () => setShowDeactivateConfirm(false),
+            disabled: isDeactivating,
+          },
+          {
+            label: isDeactivating ? 'Deactivating...' : 'Confirm Deactivate',
+            onClick: handleDeactivateCollector,
+            variant: 'danger',
+            disabled: isDeactivating,
+          },
+        ]}
+      />
+
+      <Modal
         open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
         title={selectedCollector?.status === 'archived' ? 'Restore Collector?' : 'Archive Collector?'}
         message={
           selectedCollector?.status === 'archived'
@@ -760,15 +928,15 @@ export default function GarbageCollectorsPage() {
           </div>
         ) : (
           <div className="mt-4 max-h-96 overflow-auto rounded-2xl border border-gray-100">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-gray-50">
+            <table className="w-full min-w-[540px] text-left text-sm">
+              <thead className="sticky top-0 bg-gray-50 text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Household</th>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Purok</th>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Waste</th>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Weight</th>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Status</th>
-                  <th className="px-3 py-2 font-semibold text-gray-700">Date</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Household</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Purok</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Waste</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Weight</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Status</th>
+                  <th className="whitespace-nowrap px-3 py-2.5">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -804,7 +972,7 @@ export default function GarbageCollectorsPage() {
       </Modal>
 
       {toastMessage && (
-        <div className="fixed right-4 top-4 z-[60] rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm font-semibold text-green-700 shadow-lg">
+        <div className="fixed right-4 top-4 z-[60] max-w-[calc(100vw-2rem)] break-words rounded-2xl border border-green-200 bg-white px-4 py-3 text-sm font-semibold text-green-700 shadow-lg sm:max-w-md">
           {toastMessage}
         </div>
       )}

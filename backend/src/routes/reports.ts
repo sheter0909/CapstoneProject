@@ -2,7 +2,8 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { prisma } from '../db.js';
 import { ok } from '../response.js';
 import { requireAuth } from '../middleware.js';
-import { list, reportByPeriod } from './helpers.js';
+import { ACTIVITY_LOG_LIST_SELECT, list, reportByPeriod } from './helpers.js';
+import type { Prisma } from '../generated/prisma/client.js';
 
 export const reportRoutes = Router();
 
@@ -44,12 +45,23 @@ function percentDelta(currentVal: number, previousVal: number): string {
   return `${change >= 0 ? '+' : ''}${change.toFixed(0)}% this month`;
 }
 
-interface EntryLike { wasteType: string; weightKg: unknown }
-function wasteStats(entries: EntryLike[]): { total: number; rate: number } {
-  const total = entries.reduce((sum, e) => sum + Number(e.weightKg), 0);
-  const recycled = entries
-    .filter((e) => e.wasteType === 'recyclable')
-    .reduce((sum, e) => sum + Number(e.weightKg), 0);
+// Sums weight per waste type in the database (GROUP BY) instead of loading every
+// row and reducing in memory. Semantics match the previous wasteStats: total is
+// the sum of all weights, recycled is the sum for wasteType = 'recyclable', and
+// rate is recycled/total*100 (0 when total is 0).
+async function wasteAggregate(where: Prisma.CollectionEntryWhereInput): Promise<{ total: number; rate: number }> {
+  const grouped = await prisma.collectionEntry.groupBy({
+    by: ['wasteType'],
+    where,
+    _sum: { weightKg: true },
+  });
+  let total = 0;
+  let recycled = 0;
+  for (const row of grouped) {
+    const sum = Number(row._sum.weightKg ?? 0);
+    total += sum;
+    if (row.wasteType === 'recyclable') recycled += sum;
+  }
   return { total, rate: total ? (recycled / total) * 100 : 0 };
 }
 
@@ -81,7 +93,7 @@ async function getDashboardStats(_req: Request, res: Response, next: NextFunctio
 // ─── Recent activity ───────────────────────────────────────────────────────
 async function getRecentActivity(req: Request, res: Response, next: NextFunction) {
   try {
-    return ok(res, await list(prisma.activityLog, req, {}));
+    return ok(res, await list(prisma.activityLog, req, {}, ACTIVITY_LOG_LIST_SELECT));
   } catch (error) {
     next(error);
   }
@@ -91,13 +103,12 @@ async function getRecentActivity(req: Request, res: Response, next: NextFunction
 // Was returning prisma.household.count() = 17 (all). Now uses NON_ARCHIVED = 16.
 async function getReportsSummary(_req: Request, res: Response, next: NextFunction) {
   try {
-    const [totalHouseholds, activeCollectors, entries] = await Promise.all([
+    const [totalHouseholds, activeCollectors, waste] = await Promise.all([
       prisma.household.count({ where: NON_ARCHIVED_HOUSEHOLD }),
       prisma.garbageCollector.count({ where: ACTIVE_COLLECTOR }),
-      prisma.collectionEntry.findMany({ select: { wasteType: true, weightKg: true } }),
+      wasteAggregate({}),
     ]);
-    const { total: wasteCollected, rate: recycledRate } = wasteStats(entries);
-    return ok(res, { totalHouseholds, activeCollectors, wasteCollected, recycledRate });
+    return ok(res, { totalHouseholds, activeCollectors, wasteCollected: waste.total, recycledRate: waste.rate });
   } catch (error) {
     next(error);
   }
@@ -119,9 +130,9 @@ async function getStatsSummary(_req: Request, res: Response, next: NextFunction)
       activeCollectors,
       thisMonthCollectors,
       lastMonthCollectors,
-      allEntries,
-      thisMonthEntries,
-      lastMonthEntries,
+      all,
+      thisM,
+      lastM,
     ] = await Promise.all([
       prisma.household.count({ where: NON_ARCHIVED_HOUSEHOLD }),
       prisma.household.count({ where: { ...NON_ARCHIVED_HOUSEHOLD, joinDate: thisMonth } }),
@@ -129,20 +140,10 @@ async function getStatsSummary(_req: Request, res: Response, next: NextFunction)
       prisma.garbageCollector.count({ where: ACTIVE_COLLECTOR }),
       prisma.garbageCollector.count({ where: { ...ACTIVE_COLLECTOR, joinDate: thisMonth } }),
       prisma.garbageCollector.count({ where: { ...ACTIVE_COLLECTOR, joinDate: lastMonth } }),
-      prisma.collectionEntry.findMany({ select: { wasteType: true, weightKg: true } }),
-      prisma.collectionEntry.findMany({
-        where: { timestamp: thisMonth },
-        select: { wasteType: true, weightKg: true },
-      }),
-      prisma.collectionEntry.findMany({
-        where: { timestamp: lastMonth },
-        select: { wasteType: true, weightKg: true },
-      }),
+      wasteAggregate({}),
+      wasteAggregate({ timestamp: thisMonth }),
+      wasteAggregate({ timestamp: lastMonth }),
     ]);
-
-    const all = wasteStats(allEntries);
-    const thisM = wasteStats(thisMonthEntries);
-    const lastM = wasteStats(lastMonthEntries);
 
     return ok(res, {
       totalHouseholds,

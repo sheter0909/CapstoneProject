@@ -38,7 +38,7 @@ export const login = [
 ];
 
 export const accountFields = [
-  body('householdId').trim().notEmpty().withMessage('Household ID is required.'),
+  body('householdId').optional().trim(),
   body('fullName').trim().notEmpty().withMessage('Full name is required.'),
   body('purok').trim().notEmpty().withMessage('Purok is required.'),
   body('address').optional().trim(),
@@ -56,9 +56,19 @@ export const collectorFields = [
 export const notificationFields = [
   body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 120 }).withMessage('Title must be at most 120 characters.'),
   body('message').trim().notEmpty().withMessage('Message is required.').isLength({ max: 2000 }).withMessage('Message must be at most 2000 characters.'),
-  body('recipientType').isIn(['household', 'collector', 'admin', 'all-households', 'all-collectors']).withMessage('Recipient type must be household, collector, admin, all-households, or all-collectors.'),
+  body('recipientType')
+    .isIn(['household', 'collector', 'admin', 'all-households', 'all-collectors', 'purok-households', 'purok-collectors'])
+    .withMessage('Recipient type must be one of: household, collector, admin, all-households, all-collectors, purok-households, purok-collectors.'),
   body('householdId').optional().trim(),
   body('collectorId').optional().trim(),
+  body('reportReason').optional().trim(),
+  body('targetPurok').optional().trim().isLength({ max: 100 }).withMessage('Purok name must be at most 100 characters.'),
+  body('level').optional().trim(),
+];
+
+export const editAnnouncementFields = [
+  body('title').trim().notEmpty().withMessage('Title is required.').isLength({ max: 120 }).withMessage('Title must be at most 120 characters.'),
+  body('message').trim().notEmpty().withMessage('Message is required.').isLength({ max: 2000 }).withMessage('Message must be at most 2000 characters.'),
   body('level').optional().trim(),
 ];
 

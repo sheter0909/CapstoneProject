@@ -153,6 +153,17 @@ export default function GarbageCollectorScanResultsScreen() {
                 <Text style={styles.primaryButtonText}>Proceed to Collection Input</Text>
               </Pressable>
             )}
+            <Pressable
+              style={styles.flagButton}
+              onPress={() => {
+                router.push({
+                  pathname: '/garbagecollector/contact',
+                  params: { householdId: household?.householdId || targetId },
+                });
+              }}
+            >
+              <Text style={styles.flagButtonText}>Flag Household (No garbage out / Report)</Text>
+            </Pressable>
           </>
         )}
 
@@ -283,6 +294,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     textAlign: 'center',
+  },
+  flagButton: {
+    marginTop: Spacing.two,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#B45309',
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+  },
+  flagButtonText: {
+    color: '#B45309',
+    fontWeight: '700',
   },
   backButton: {
     marginTop: Spacing.two,

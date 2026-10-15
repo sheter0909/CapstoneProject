@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth';
 import { safeBack } from '@/lib/navigation';
@@ -14,7 +15,6 @@ export default function HouseholdQrScreen() {
   // QR contract: `household-{householdId}` only. The scanner splits on '-' and
   // reads segments[1], so no suffix (address, commas, extra dashes) may be appended.
   const qrData = `household-${householdId}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(qrData)}`;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -24,7 +24,7 @@ export default function HouseholdQrScreen() {
 
         <View style={styles.qrContainer}>
           <View style={styles.qrWrapper}>
-            <Image source={{ uri: qrUrl }} style={styles.qrImage} resizeMode="contain" />
+            <QRCode value={qrData} size={216} backgroundColor="#FFFFFF" color="#000000" />
           </View>
         </View>
 

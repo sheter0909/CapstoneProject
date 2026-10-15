@@ -4,10 +4,14 @@ Express + PostgreSQL (Neon) API using Prisma for the Admin Portal, Household App
 
 ## Run
 
-1. Copy `.env.example` to `.env` and set `DATABASE_URL`, `DIRECT_URL`, and a strong `JWT_SECRET`.
+1. Copy `.env.example` to `.env` and set `DATABASE_URL`, `DIRECT_URL`, `PROD_DB_HOST`, and a strong `JWT_SECRET`.
 2. Run `npm install` and `npm run dev`.
 
 The API listens on `http://localhost:4000` by default. Every response uses `{ success, data, message?, errors? }`.
+
+For Neon, use the pooled connection string (hostname includes `-pooler`) for `DATABASE_URL`, which the API uses at runtime. Use the direct, non-pooled connection string for `DIRECT_URL`, which Prisma CLI commands use through `prisma.config.ts`. Set `PROD_DB_HOST` to the production database hostname only; local or other non-production backends warn at startup if their `DATABASE_URL` targets that host. Startup logs show only the database host and name, never connection credentials.
+
+The `/health/db` and `/api/health/db` probes return a generic error message and a safe `code` value (`auth_failed`, `timeout`, or `unreachable`) on connection failure. Detailed error diagnostics are logged server-side with connection URLs and secret-like values redacted.
 
 ## Route groups
 

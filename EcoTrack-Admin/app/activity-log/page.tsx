@@ -96,7 +96,7 @@ export default function ActivityLogPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 py-8">
         {/* Title */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-2">Activity Log</h2>
@@ -117,14 +117,14 @@ export default function ActivityLogPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
+              <table className="w-full min-w-[640px]">
+                <thead className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">User</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Activity Type</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Description</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Time</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                    <th className="whitespace-nowrap px-6 py-3">User</th>
+                    <th className="whitespace-nowrap px-6 py-3">Activity Type</th>
+                    <th className="whitespace-nowrap px-6 py-3">Description</th>
+                    <th className="whitespace-nowrap px-6 py-3">Time</th>
+                    <th className="whitespace-nowrap px-6 py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>

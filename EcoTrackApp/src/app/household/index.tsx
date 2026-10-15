@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Spacing } from '@/constants/theme';
 import { AppButton, SectionHeader } from '@/components/ui';
 import { useAuth } from '@/context/auth';
-import { CollectionHistoryItem, householdApi, NotificationItem } from '@/lib/api';
+import { CollectionHistoryItem, HouseholdHistoryRow, householdApi, NotificationItem } from '@/lib/api';
 
 const COMPLIANT_MESSAGE = {
   title: 'Great job!',
@@ -14,7 +14,8 @@ const COMPLIANT_MESSAGE = {
 export default function HouseholdHomeScreen() {
   const router = useRouter();
   const { householdUser, hydrated, refreshHouseholdProfile } = useAuth();
-  const [latestHistory, setLatestHistory] = useState<CollectionHistoryItem | null>(null);
+  const [latestHistory, setLatestHistory] = useState<HouseholdHistoryRow | null>(null);
+  const [latestCollection, setLatestCollection] = useState<CollectionHistoryItem | null>(null);
   const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
   const compliantMessage = COMPLIANT_MESSAGE;
 
@@ -22,14 +23,20 @@ export default function HouseholdHomeScreen() {
     let isMounted = true;
     async function loadData() {
       try {
-        await refreshHouseholdProfile();
-        const [histories, notifications] = await Promise.all([
-          householdApi.history().catch(() => []),
+        const [, histories, notifications] = await Promise.all([
+          refreshHouseholdProfile().catch(() => undefined),
+          // Fetch a small window (not just 1): when the newest row is a
+          // report, the latest collection can sit a few rows down. The merge
+          // only ever contains non-dismissed reports.
+          householdApi.history('?limit=10&include=reports').catch(() => []),
           householdApi.notifications().catch(() => []),
         ]);
         if (isMounted) {
           if (Array.isArray(histories) && histories.length > 0) {
-            setLatestHistory(histories[0]);
+            const rows = histories as HouseholdHistoryRow[];
+            setLatestHistory(rows[0]);
+            const firstCollection = rows.find((h) => h.kind === 'collection');
+            setLatestCollection(firstCollection && firstCollection.kind === 'collection' ? firstCollection : null);
           }
           if (Array.isArray(notifications) && notifications.length > 0) {
             setLatestNotification(notifications[0]);
@@ -49,7 +56,9 @@ export default function HouseholdHomeScreen() {
     [householdUser?.purok, householdUser?.address].filter(Boolean).join(' • ')
     || 'Community Resident';
   const displayId = householdUser?.householdId || 'Pending';
-  const isCompliant = !latestHistory || latestHistory.segregationStatus === 'segregated';
+  const latestIsDirtyReport = latestHistory?.kind === 'report' && latestHistory.reason === 'dirty_surroundings';
+  const isCompliant =
+    !latestCollection || (latestCollection.segregationStatus === 'segregated' && !latestIsDirtyReport);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -91,18 +100,18 @@ export default function HouseholdHomeScreen() {
 
       <View style={styles.sectionCard}>
         <SectionHeader title="Collection History" actionLabel="View all" onAction={() => router.push('/household/history')} />
-        {latestHistory ? (
+        {latestCollection ? (
           <View style={styles.historyRow}>
             <View>
               <Text style={styles.historyDate}>
-                {new Date(latestHistory.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                {new Date(latestCollection.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
               </Text>
               <Text style={styles.historyMeta}>
-                {latestHistory.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'} · {latestHistory.wasteType === 'mixed' ? 'Mixed' : latestHistory.wasteType}
+                {latestCollection.segregationStatus === 'segregated' ? 'Segregated' : 'Not segregated'} · {latestCollection.wasteType === 'mixed' ? 'Mixed' : latestCollection.wasteType}
               </Text>
             </View>
             <View style={styles.historyBadge}>
-              <Text style={styles.badgeText}>{String(latestHistory.weightKg)} kg</Text>
+              <Text style={styles.badgeText}>{String(latestCollection.weightKg)} kg</Text>
             </View>
           </View>
         ) : (

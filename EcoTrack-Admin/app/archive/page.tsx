@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/Pagination';
 import { adminApi } from '@/lib/api';
@@ -61,11 +61,77 @@ export default function ArchivePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [collectors, setCollectors] = useState<GarbageCollector[]>([]);
+  const [totalHouseholds, setTotalHouseholds] = useState(0);
+  const [totalCollectors, setTotalCollectors] = useState(0);
   const [activeTab, setActiveTab] = useState<TabKey>('households');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const loadArchive = useCallback(() => {
+    setIsLoading(true);
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(pageSize),
+      ...(debouncedQuery ? { q: debouncedQuery } : {}),
+    });
+    const query = `?${params.toString()}`;
+
+    if (activeTab === 'households') {
+      adminApi.archivedHouseholds(query)
+        .then((result) => {
+          setTotalHouseholds(result.total ?? 0);
+          setHouseholds(
+            ((result.items ?? []) as ArchivedHouseholdRow[]).map((account) => ({
+              id: account.householdId,
+              dbId: account.id,
+              name: account.fullName,
+              email: account.householdId,
+              unit: account.address ?? '',
+              joinDate: account.joinDate,
+              status: account.status,
+            }))
+          );
+        })
+        .catch(() => {
+          setHouseholds([]);
+          setTotalHouseholds(0);
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      adminApi.archivedCollectors(query)
+        .then((result) => {
+          setTotalCollectors(result.total ?? 0);
+          setCollectors(
+            ((result.items ?? []) as ArchivedCollectorRow[]).map((account) => ({
+              id: account.collectorId,
+              dbId: account.id,
+              name: account.fullName,
+              email: '',
+              phone: account.contactNumber ?? '',
+              zone: account.assignedArea,
+              joinDate: account.joinDate,
+              status: account.status,
+            }))
+          );
+        })
+        .catch(() => {
+          setCollectors([]);
+          setTotalCollectors(0);
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, [activeTab, page, pageSize, debouncedQuery]);
 
   useEffect(() => {
     const authToken = localStorage.getItem('authToken');
@@ -83,87 +149,11 @@ export default function ArchivePage() {
       return;
     }
 
-    void (async () => {
-      try {
-        const [householdResult, collectorResult] = await Promise.all([
-          adminApi.archivedHouseholds('?limit=100'),
-          adminApi.archivedCollectors('?limit=100'),
-        ]);
-        setHouseholds(
-          ((householdResult.items ?? []) as ArchivedHouseholdRow[]).map((account) => ({
-            id: account.householdId,
-            dbId: account.id,
-            name: account.fullName,
-            email: account.householdId,
-            unit: account.address ?? '',
-            joinDate: account.joinDate,
-            status: account.status,
-          }))
-        );
-        setCollectors(
-          ((collectorResult.items ?? []) as ArchivedCollectorRow[]).map((account) => ({
-            id: account.collectorId,
-            dbId: account.id,
-            name: account.fullName,
-            email: '',
-            phone: account.contactNumber ?? '',
-            zone: account.assignedArea,
-            joinDate: account.joinDate,
-            status: account.status,
-          }))
-        );
-      } catch {
-        setHouseholds([]);
-        setCollectors([]);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, [router]);
+    loadArchive();
+  }, [router, loadArchive]);
 
-  const archivedHouseholds = useMemo(
-    () => households.filter((household) => household.status === 'archived'),
-    [households]
-  );
-
-  const archivedCollectors = useMemo(
-    () => collectors.filter((collector) => collector.status === 'archived'),
-    [collectors]
-  );
-
-  const filteredHouseholds = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return archivedHouseholds.filter((household) =>
-      !query ||
-      household.name.toLowerCase().includes(query) ||
-      household.email.toLowerCase().includes(query) ||
-      household.unit.toLowerCase().includes(query)
-    );
-  }, [archivedHouseholds, searchQuery]);
-
-  const filteredCollectors = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return archivedCollectors.filter((collector) =>
-      !query ||
-      collector.name.toLowerCase().includes(query) ||
-      collector.email.toLowerCase().includes(query) ||
-      collector.zone.toLowerCase().includes(query) ||
-      collector.phone.toLowerCase().includes(query)
-    );
-  }, [archivedCollectors, searchQuery]);
-
-  const pagedHouseholds = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredHouseholds.slice(start, start + pageSize);
-  }, [filteredHouseholds, page, pageSize]);
-
-  const pagedCollectors = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredCollectors.slice(start, start + pageSize);
-  }, [filteredCollectors, page, pageSize]);
-
-  const currentItems = activeTab === 'households' ? pagedHouseholds : pagedCollectors;
-  const currentTotal = activeTab === 'households' ? filteredHouseholds.length : filteredCollectors.length;
+  const currentItems = activeTab === 'households' ? households : collectors;
+  const currentTotal = activeTab === 'households' ? totalHouseholds : totalCollectors;
 
   const handleRestore = async (id: string) => {
     try {
@@ -171,15 +161,14 @@ export default function ArchivePage() {
         const target = households.find((household) => household.id === id);
         if (!target) return;
         await adminApi.unarchiveHousehold(target.dbId);
-        setHouseholds((current) => current.filter((household) => household.id !== id));
         setToastMessage('Household account restored successfully.');
       } else {
         const target = collectors.find((collector) => collector.id === id);
         if (!target) return;
         await adminApi.unarchiveCollector(target.dbId);
-        setCollectors((current) => current.filter((collector) => collector.id !== id));
         setToastMessage('Garbage collector account restored successfully.');
       }
+      loadArchive();
     } catch (error) {
       setToastMessage(error instanceof Error ? error.message : 'Unable to restore account.');
     }
@@ -210,7 +199,7 @@ export default function ArchivePage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 to-green-100">
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto max-w-7xl 2xl:max-w-[1440px] px-4 py-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-green-700">Archive Center</p>
@@ -229,7 +218,7 @@ export default function ArchivePage() {
                     : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                {tab === 'households' ? `Households (${archivedHouseholds.length})` : `Collectors (${archivedCollectors.length})`}
+                {tab === 'households' ? `Households (${totalHouseholds})` : `Collectors (${totalCollectors})`}
               </button>
             ))}
           </div>
@@ -267,21 +256,20 @@ export default function ArchivePage() {
         <div className="overflow-hidden rounded-[28px] border border-green-100 bg-white shadow-[0_20px_60px_rgba(20,83,45,0.08)]">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm text-gray-600">
-              <thead className="bg-gray-50 text-left text-[11px] uppercase tracking-[0.2em] text-gray-500">
+              <thead className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 sm:px-6">ID</th>
-                  <th className="px-4 py-3 sm:px-6">Name</th>
-                  {activeTab === 'collectors' && <th className="px-4 py-3 sm:px-6">Zone</th>}
-                  <th className="px-4 py-3 sm:px-6">Email</th>
-                  <th className="px-4 py-3 sm:px-6">Status</th>
-                  <th className="px-4 py-3 sm:px-6">Joined</th>
-                  <th className="px-4 py-3 sm:px-6">Action</th>
+                  <th className="whitespace-nowrap px-4 py-3 sm:px-6">ID</th>
+                  <th className="whitespace-nowrap px-4 py-3 sm:px-6">Name</th>
+                  {activeTab === 'collectors' && <th className="whitespace-nowrap px-4 py-3 sm:px-6">Zone</th>}
+                  <th className="whitespace-nowrap px-4 py-3 sm:px-6">Status</th>
+                  <th className="whitespace-nowrap px-4 py-3 sm:px-6">Joined</th>
+                  <th className="whitespace-nowrap px-4 py-3 sm:px-6">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {currentItems.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-10 text-center text-sm text-gray-500" colSpan={activeTab === 'collectors' ? 7 : 6}>
+                    <td className="px-4 py-10 text-center text-sm text-gray-500" colSpan={activeTab === 'collectors' ? 6 : 5}>
                       No archived {activeTab === 'households' ? 'households' : 'collectors'} found.
                     </td>
                   </tr>
@@ -293,7 +281,6 @@ export default function ArchivePage() {
                       {activeTab === 'collectors' && (
                         <td className="px-4 py-4 text-sm text-gray-800 sm:px-6">{(item as GarbageCollector).zone}</td>
                       )}
-                      <td className="px-4 py-4 text-sm text-gray-700 sm:px-6">{item.email}</td>
                       <td className="px-4 py-4 sm:px-6">
                         <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusClass[item.status]}`}>
                           {item.status}

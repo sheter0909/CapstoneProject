@@ -1,5 +1,5 @@
 import React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppShell from "@/components/AppShell";
 import ServiceWorkerCleanup from "@/components/ServiceWorkerCleanup";
@@ -15,11 +15,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#1F7A37",
+};
+
 export const metadata: Metadata = {
-  title: "EcoTrack Admin Dashboard",
+  title: "EcoTrack",
   description: "Admin dashboard for residential waste management",
   keywords: ["ecotrack", "waste", "monitoring"],
   authors: [{ name: "EcoTrack Team" }],
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({

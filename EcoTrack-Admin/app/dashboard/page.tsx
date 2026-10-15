@@ -47,7 +47,6 @@ function greetingForHour(hour: number): string {
 }
 
 function readStoredSession(): { token: string | null; user: AdminUser | null } {
-  if (typeof window === 'undefined') return { token: null, user: null };
   let user: AdminUser | null = null;
   try {
     const userStr = window.localStorage.getItem('adminUser');
@@ -58,13 +57,39 @@ function readStoredSession(): { token: string | null; user: AdminUser | null } {
   return { token: window.localStorage.getItem('authToken'), user };
 }
 
+// Neutral first-render state (server + first client render): a
+// dashboard-shaped skeleton. The real session is read in useEffect only,
+// so the two renders always match. No render-time localStorage reads.
+function DashboardSkeleton() {
+  return (
+    <main className="min-h-screen bg-[linear-gradient(135deg,#f7fdf8_0%,#eef9ef_100%)]">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8" aria-hidden="true">
+        <section className="overflow-hidden rounded-[30px] border border-green-100 bg-green-700 p-7 sm:p-8">
+          <div className="h-4 w-28 animate-pulse rounded bg-white/25" />
+          <div className="mt-3 h-9 w-2/3 animate-pulse rounded-lg bg-white/25" />
+          <div className="mt-3 h-5 w-1/2 animate-pulse rounded bg-white/20" />
+        </section>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Loading statistics">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-[24px] border border-green-100 bg-white/90 p-6">
+              <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
+              <div className="mt-3 h-8 w-16 animate-pulse rounded bg-gray-200" />
+              <div className="mt-2 h-3 w-32 animate-pulse rounded bg-gray-100" />
+            </div>
+          ))}
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
 
-
-  const [session] = useState(readStoredSession);
-  const adminUser = session.user;
-  const isAuthenticated = session.token !== null && session.user !== null;
+  // Starts null on both server and first client render; filled in useEffect.
+  const [session, setSession] = useState<{ token: string | null; user: AdminUser | null } | null>(null);
+  const adminUser = session?.user ?? null;
+  const isAuthenticated = session !== null && session.token !== null && session.user !== null;
 
   // ── Poll KPI stats every 10 s ──────────────────────────────────────────
   const { data: liveStats } = usePolled(
@@ -79,8 +104,16 @@ export default function DashboardPage() {
   const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    const stored = readStoredSession();
+    if (!stored.token || !stored.user) {
       router.push('/login');
+      return;
+    }
+    setSession(stored);
+  }, [router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
       return;
     }
 
@@ -126,13 +159,7 @@ export default function DashboardPage() {
   } : null;
 
   if (!isAuthenticated) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#f7fdf8_0%,#eef9ef_100%)]">
-        <div className="text-center">
-          <p className="text-lg text-gray-600">Redirecting to login...</p>
-        </div>
-      </main>
-    );
+    return <DashboardSkeleton />;
   }
 
   const greeting = greetingForHour(new Date().getHours());
@@ -239,12 +266,12 @@ export default function DashboardPage() {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[640px] text-gray-600">
-                      <thead className="bg-gray-50 text-left text-xs uppercase tracking-[0.12em] text-gray-500">
+                      <thead className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-gray-500">
                         <tr>
-                          <th className="px-4 py-3">Household</th>
-                          <th className="px-4 py-3">Purok</th>
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Joined</th>
+                          <th className="whitespace-nowrap px-4 py-3">Household</th>
+                          <th className="whitespace-nowrap px-4 py-3">Purok</th>
+                          <th className="whitespace-nowrap px-4 py-3">Status</th>
+                          <th className="whitespace-nowrap px-4 py-3">Joined</th>
                         </tr>
                       </thead>
                       <tbody>

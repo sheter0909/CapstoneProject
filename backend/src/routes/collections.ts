@@ -5,12 +5,14 @@ import { requireAuth, validateRequest } from '../middleware.js';
 import { collectionFields, idParam, pagination } from '../validators.js';
 import {
   buildWarningText,
+  checkPurokMatch,
   EDIT_WINDOW_HOURS,
   editableUntilFor,
   paged,
   warningLevelForCount,
   withEditable,
 } from './helpers.js';
+import { reconcileSkipEscalation } from './escalations.js';
 
 export const collectionRoutes = Router();
 
@@ -29,8 +31,18 @@ async function getCollections(req: Request, res: Response, next: NextFunction) {
     const householdIds = [...new Set(entries.map((entry) => entry.householdId))];
     const collectorIds = [...new Set(entries.map((entry) => entry.collectorId))];
     const [households, collectors] = await Promise.all([
-      householdIds.length ? prisma.household.findMany({ where: { householdId: { in: householdIds } } }) : [],
-      collectorIds.length ? prisma.garbageCollector.findMany({ where: { collectorId: { in: collectorIds } } }) : [],
+      householdIds.length
+        ? prisma.household.findMany({
+            where: { householdId: { in: householdIds } },
+            select: { householdId: true, fullName: true, purok: true, address: true },
+          })
+        : [],
+      collectorIds.length
+        ? prisma.garbageCollector.findMany({
+            where: { collectorId: { in: collectorIds } },
+            select: { collectorId: true, fullName: true },
+          })
+        : [],
     ]);
     const householdById = new Map(households.map((household) => [household.householdId, household] as const));
     const collectorById = new Map(collectors.map((collector) => [collector.collectorId, collector] as const));
@@ -62,6 +74,9 @@ async function submitCollection(req: Request, res: Response, next: NextFunction)
     if (!householdId) return fail(res, 400, 'Household ID is required.');
     const household = await prisma.household.findUnique({ where: { householdId } });
     if (!household) return fail(res, 404, 'Household not found. Check the Household ID or QR code and try again.');
+    const collector = await prisma.garbageCollector.findUnique({ where: { collectorId: req.user!.id } });
+    const purokError = checkPurokMatch(collector?.purokId, household.purokId);
+    if (purokError) return fail(res, 403, purokError);
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const existing = await prisma.collectionEntry.findFirst({ where: { householdId, timestamp: { gte: sevenDaysAgo } } });
     if (existing) return fail(res, 409, 'This household was already collected this week.');
@@ -70,7 +85,6 @@ async function submitCollection(req: Request, res: Response, next: NextFunction)
     if (!isNotSegregatedPost && (!wasteTypePost || wasteTypePost === 'mixed')) {
       return fail(res, 422, 'Choose a waste type.', [{ field: 'wasteType', message: 'Choose a waste type.' }]);
     }
-    const collector = await prisma.garbageCollector.findUnique({ where: { collectorId: req.user!.id } });
     const collectorName = collector?.fullName ?? req.user!.name ?? req.user!.id;
     const result = await prisma.$transaction(async (tx) => {
       const createdEntry = await tx.collectionEntry.create({
@@ -108,6 +122,12 @@ async function submitCollection(req: Request, res: Response, next: NextFunction)
       }
       return { entry: createdEntry, warning };
     });
+    // Skip-streak escalation must never block logging a collection.
+    try {
+      await reconcileSkipEscalation(householdId, 'collection logged');
+    } catch (reconcileError) {
+      console.error('reconcileSkipEscalation failed after collection:', reconcileError);
+    }
     return created(res, {
       ...result.entry,
       weightKg: Number((result.entry as unknown as { weightKg: unknown }).weightKg),

@@ -90,6 +90,7 @@ export type HouseholdSummary = {
   household: HouseholdUser | null;
   history: CollectionHistoryItem[];
   notSegregatedCount: number;
+  violationCount?: number;
   nextWarningLevel: string;
 };
 
@@ -105,8 +106,21 @@ export type NotificationItem = {
   message: string;
   level: string;
   read: boolean;
+  reportReason?: 'no_garbage_out' | 'dirty_surroundings' | 'other' | null;
+  dismissedAt?: string | null;
+  editable?: boolean;
+  editableUntil?: string;
   createdAt: string;
+  editedAt?: string | null;
 };
+
+// One row of the merged household history: a completed collection or a
+// non-dismissed collector report (Missed / Violations / Other).
+export type HouseholdHistoryRow =
+  | ({ kind: 'collection' } & CollectionHistoryItem)
+  | ({ kind: 'report'; reason: 'no_garbage_out' | 'dirty_surroundings' | 'other' } & NotificationItem);
+
+export type ReportReason = 'no_garbage_out' | 'dirty_surroundings' | 'other';
 
 export type SendNotificationBody = {
   title: string;
@@ -115,6 +129,7 @@ export type SendNotificationBody = {
   householdId?: string;
   collectorId?: string;
   level?: string;
+  reportReason?: ReportReason;
 };
 
 const RETRY_DELAYS_MS = [3_000];
@@ -268,7 +283,8 @@ export const householdApi = {
       body: JSON.stringify({ identifier, password }),
     }),
   profile: () => householdRequest<HouseholdUser>('/households/me'),
-  history: () => householdRequest<CollectionHistoryItem[]>('/households/me/history'),
+  history: (query?: string) =>
+    householdRequest<HouseholdHistoryRow[]>(`/households/me/history${query ? (query.startsWith('?') ? query : `?${query}`) : ''}`),
   notifications: () => householdRequest<NotificationItem[]>('/households/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>
     householdRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
@@ -321,6 +337,20 @@ export const collectorApi = {
   notifications: () => collectorRequest<NotificationItem[]>('/collectors/me/notifications'),
   sendNotification: (body: SendNotificationBody) =>
     collectorRequest<NotificationItem>('/notifications', { method: 'POST', body: JSON.stringify(body) }),
+  updateReport: (id: string, body: { title?: string; message?: string; reportReason?: ReportReason }) =>
+    collectorRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/report`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  dismissReport: (id: string) =>
+    collectorRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/dismiss`, { method: 'PATCH' }),
+  myReports: () => collectorRequest<NotificationItem[]>('/notifications/my-reports'),
   markNotificationRead: (id: string) =>
     collectorRequest<NotificationItem>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
 };
+
+export function pingServerDb(): void {
+  // Fire-and-forget: wakes up Render instance and establishes Prisma DB connection
+  // on login mount without blocking UI or throwing errors.
+  fetch(`${API_URL}/health/db`).catch(() => undefined);
+}

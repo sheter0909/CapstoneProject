@@ -4,6 +4,7 @@ import { validationResult } from 'express-validator';
 import { config } from './config.js';
 import { fail } from './response.js';
 import { prisma } from './db.js';
+import { logDatabaseError } from './dbDiagnostics.js';
 
 // Single source of truth for role names: JWT creation (auth.ts), route guards
 // (routes/*), and status revalidation below must all use these — never scatter
@@ -33,7 +34,7 @@ export function requireAuth(...roles: Role[]) {
       try {
         const account =
           payload.role === 'admin'
-            ? await prisma.admin.findFirst({ where: { OR: [{ id: payload.id }, { email: payload.id }] } })
+            ? await prisma.admin.findFirst({ where: { OR: [{ id: payload.id }, { adminId: payload.id }, { email: payload.id }] } })
             : payload.role === 'household'
               ? await prisma.household.findUnique({ where: { householdId: payload.id } })
               : await prisma.garbageCollector.findUnique({ where: { collectorId: payload.id } });
@@ -59,7 +60,8 @@ export function validateRequest(req: Request, res: Response, next: NextFunction)
       field: typeof err.path === 'string' ? err.path : typeof err.param === 'string' ? err.param : 'general',
       message: typeof err.msg === 'string' ? err.msg : 'Invalid value.',
     }));
-    return fail(res, 422, 'Validation failed.', formattedErrors);
+    const details = formattedErrors.map((e) => `${e.field}: ${e.message}`).join(', ');
+    return fail(res, 422, `Validation failed: ${details}`, formattedErrors);
   }
   next();
 }
@@ -79,7 +81,7 @@ export function handleError(error: unknown, _req: Request, res: Response, _next:
   if (code === 'P2025') {
     return fail(res, 404, 'Record not found.');
   }
-  console.error(error);
+  logDatabaseError('unhandled API error', error);
   // Never leak internals (file paths, SQL, credentials) to clients — the
   // admin login page renders `message` verbatim. Full detail stays server-side.
   return fail(res, 500, 'Internal server error. Please try again.');
