@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { webCursor } from './ui';
 
@@ -63,6 +63,7 @@ export default function CollectionHistory({
   rows,
   statusFilters,
   emptyHint,
+  emptyTitleFor,
   onEdit,
 }: {
   title?: string;
@@ -70,11 +71,19 @@ export default function CollectionHistory({
   rows: HistoryRow[];
   statusFilters: string[];
   emptyHint: string;
+  // Per-filter empty-state title (e.g. Missed -> "No missed collections").
+  // Falls back to the generic "No records yet" wording when omitted.
+  emptyTitleFor?: (status: string) => string;
   onEdit?: (row: HistoryRow) => void;
 }) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState('All');
+
+  // Effective filter: snaps back to 'All' only when the selected status is no
+  // longer in the list (e.g. the caller changes statusFilters). Row reloads
+  // never reset it, and no effect is needed since this derives every render.
+  const effectiveStatus = statusFilters.includes(status) ? status : 'All';
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), 250);
@@ -83,19 +92,21 @@ export default function CollectionHistory({
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (status !== 'All' && r.statusKey !== status) return false;
+      if (effectiveStatus !== 'All' && r.statusKey !== effectiveStatus) return false;
       if (!debounced) return true;
       return r.searchText.toLowerCase().includes(debounced);
     });
-  }, [rows, debounced, status]);
+  }, [rows, debounced, effectiveStatus]);
 
   const sections = useMemo(() => groupByDate(filtered), [filtered]);
   const todayStr = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerWrap}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{title}</Text>
+        </View>
       </View>
 
       <View style={styles.subHeader}>
@@ -104,7 +115,7 @@ export default function CollectionHistory({
           accessibilityLabel="Cycle status filter"
           style={[webCursor(), styles.iconBtn]}
           onPress={() => {
-            const i = statusFilters.indexOf(status);
+            const i = statusFilters.indexOf(effectiveStatus);
             setStatus(statusFilters[(i + 1) % statusFilters.length]);
           }}
         >
@@ -131,23 +142,32 @@ export default function CollectionHistory({
         </View>
       </View>
 
-      <View style={styles.chips}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chips}
+      >
         {statusFilters.map((f) => (
           <Pressable
             key={f}
             onPress={() => setStatus(f)}
-            style={[webCursor(), styles.chip, status === f && styles.chipActive]}
+            style={[webCursor(), styles.chip, effectiveStatus === f && styles.chipActive]}
           >
-            <Text style={[styles.chipText, status === f && styles.chipTextActive]}>{f}</Text>
+            <Text style={[styles.chipText, effectiveStatus === f && styles.chipTextActive]}>{f}</Text>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
 
       {filtered.length === 0 ? (
         <View style={styles.empty}>
           <MaterialIcons name="search-off" size={36} color="#9AA0A6" />
           <Text style={styles.emptyTitle}>
-            {query ? `No results found for '${query}'` : 'No records found'}
+            {query
+              ? `No results found for '${query}'`
+              : emptyTitleFor
+                ? emptyTitleFor(effectiveStatus)
+                : 'No records found'}
           </Text>
           <Text style={styles.emptySub}>{emptyHint}</Text>
         </View>
@@ -155,10 +175,13 @@ export default function CollectionHistory({
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => (
-            <View style={styles.band}>
-              <Text style={styles.bandText}>{section.title}</Text>
+            <View style={styles.bandWrap}>
+              <View style={styles.band}>
+                <Text style={styles.bandText}>{section.title}</Text>
+              </View>
             </View>
           )}
           renderItem={({ item }) => (
@@ -186,7 +209,19 @@ export default function CollectionHistory({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden' },
-  header: { backgroundColor: GREEN, paddingVertical: 16, alignItems: 'center' },
+  headerWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    backgroundColor: GREEN,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
   headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   subHeader: {
     backgroundColor: '#FFFFFF',
@@ -196,9 +231,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  asOf: { color: NAVY, fontWeight: '800', fontSize: 14 },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F3F4' },
-  searchRow: { paddingHorizontal: 16, paddingBottom: 8, backgroundColor: '#FFFFFF' },
+  asOf: { color: NAVY, fontWeight: '800', fontSize: 15 },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F3F4',
+  },
+  searchRow: { paddingHorizontal: 16, paddingBottom: 10, backgroundColor: '#FFFFFF' },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -208,13 +250,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  searchInput: { flex: 1, fontSize: 14, color: NAVY },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 8, backgroundColor: '#FFFFFF' },
-  chip: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#F1F3F4' },
+  searchInput: { flex: 1, fontSize: 14, color: NAVY, padding: 0 },
+  chipsScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    marginBottom: 8,
+  },
+  chips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  chip: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#F1F3F4',
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   chipActive: { backgroundColor: NAVY },
   chipText: { fontSize: 12, fontWeight: '700', color: GRAY },
   chipTextActive: { color: '#FFFFFF' },
-  band: { backgroundColor: BAND, paddingHorizontal: 16, paddingVertical: 6 },
+  listContent: { paddingBottom: 24 },
+  bandWrap: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  band: {
+    backgroundColor: BAND,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
   bandText: { color: NAVY, fontWeight: '800', fontSize: 13 },
   row: {
     flexDirection: 'row',
@@ -229,11 +303,11 @@ const styles = StyleSheet.create({
   rowLeft: { flex: 1, gap: 2, paddingRight: 12 },
   editBtn: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#E8F7E9', marginRight: 8 },
   editBtnText: { color: GREEN, fontWeight: '800', fontSize: 13 },
-  time: { color: GRAY, fontSize: 11 },
-  rowTitle: { color: NAVY, fontWeight: '800', fontSize: 15 },
-  rowSub: { color: GRAY, fontSize: 12 },
-  tag: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  tag_green: { backgroundColor: '#E6F4EA' },
+  time: { color: GRAY, fontSize: 11, fontWeight: '600', marginBottom: 2 },
+  rowTitle: { color: NAVY, fontWeight: '800', fontSize: 15, marginBottom: 2 },
+  rowSub: { color: GRAY, fontSize: 12, lineHeight: 16 },
+  tag: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'center' },
+  tag_green: { backgroundColor: '#E8F5E9' },
   tag_red: { backgroundColor: '#FDECEA' },
   tag_orange: { backgroundColor: '#FFF4E5' },
   tag_gray: { backgroundColor: '#F1F3F4' },
@@ -242,7 +316,7 @@ const styles = StyleSheet.create({
   tagText_red: { color: '#C62828' },
   tagText_orange: { color: '#E65100' },
   tagText_gray: { color: GRAY },
-  empty: { alignItems: 'center', gap: 6, paddingVertical: 48, paddingHorizontal: 24 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 48, paddingHorizontal: 24 },
   emptyTitle: { color: NAVY, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   emptySub: { color: GRAY, fontSize: 13, textAlign: 'center' },
 });

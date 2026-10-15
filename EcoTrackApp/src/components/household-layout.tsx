@@ -298,6 +298,7 @@ const styles = StyleSheet.create({
   },
   contentCardMobile: {
     borderRadius: 24,
-    padding: Spacing.three,
+    padding: 0,
+    overflow: 'hidden',
   },
 });

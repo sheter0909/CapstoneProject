@@ -11,6 +11,12 @@ export default function GarbageCollectorActivityLogsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+const EMPTY_TITLES: Record<string, string> = {
+  Done: 'No completed collections',
+  Skipped: 'No skipped collections',
+  Issue: 'No reported issues',
+};
+
   useEffect(() => {
     let mounted = true;
     collectorApi
@@ -70,6 +76,7 @@ export default function GarbageCollectorActivityLogsScreen() {
       rows={rows}
       statusFilters={['All', 'Done', 'Skipped', 'Issue']}
       emptyHint="Try a different household, address, zone, or date."
+      emptyTitleFor={(status) => EMPTY_TITLES[status] ?? 'No records found'}
       onEdit={(row) => {
         const entry = entries.find((e) => e.id === row.id);
         if (!entry) return;

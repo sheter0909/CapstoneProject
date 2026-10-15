@@ -10,9 +10,15 @@ function wasteLabel(w: string) {
 }
 
 const REPORT_LABEL: Record<string, { title: string; tag: string; statusKey: string; tone: HistoryRow['tagTone'] }> = {
-  no_garbage_out: { title: 'No garbage out', tag: 'Missed', statusKey: 'Missed', tone: 'orange' },
+  no_garbage_out: { title: 'Skip', tag: 'Missed', statusKey: 'Missed', tone: 'orange' },
   dirty_surroundings: { title: 'Dirty surroundings', tag: 'Violation', statusKey: 'Violations', tone: 'red' },
   other: { title: 'Report filed', tag: 'Report', statusKey: 'Other', tone: 'gray' },
+};
+
+const EMPTY_TITLES: Record<string, string> = {
+  Completed: 'No completed collections',
+  Missed: 'No missed collections',
+  Violations: 'No violations',
 };
 
 function toRows(items: HouseholdHistoryRow[]): HistoryRow[] {
@@ -94,6 +100,7 @@ export default function HouseholdHistoryScreen() {
       rows={rows}
       statusFilters={['All', 'Completed', 'Missed', 'Violations']}
       emptyHint="Try a different date, waste type, or status keyword."
+      emptyTitleFor={(status) => EMPTY_TITLES[status] ?? 'No records found'}
     />
   );
 }
